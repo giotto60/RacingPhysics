@@ -1,9 +1,3 @@
-/**
- * default.json — Car specification for the test vehicle.
- *
- * A rear-wheel-drive sports car, roughly equivalent to a Mazda MX-5 class car.
- * All values in SI units (kg, N, m, Nm, rad/s).
- */
 {
   "name": "Test Car",
   "mass": 1150,
