@@ -5,15 +5,15 @@ export class Engine {
   constructor(config) {
     this.idleRPM      = config.idleRPM || 900;
     this.maxRPM       = config.maxRPM || 7800;
-    this.upshiftRPM   = config.upshiftRPM || 6800;
-    this.downshiftRPM = config.downshiftRPM || 2500;
+    this.upshiftRPM   = config.upshiftRPM || 6600;
+    this.downshiftRPM = config.downshiftRPM || 2600;
 
-    this.torqueCurve  = config.torqueCurve || [[0, 120], [7800, 180]];
+    this.torqueCurve  = config.torqueCurve || [[0, 140], [7800, 200]];
     this.gearRatios   = config.gearRatios || [3.6, 2.2, 1.5, 1.1, 0.85, 0.72];
     this.finalDrive   = config.finalDrive || 3.9;
     this.reverseRatio = config.reverseRatio || 3.3;
 
-    this.currentGear  = 1; // -1: Reverse, 0: Neutral, 1..6: Forward
+    this.currentGear  = 1;
     this.currentRPM   = this.idleRPM;
     this.outputTorque = 0;
     this.shiftCooldown = 0;
@@ -32,7 +32,7 @@ export class Engine {
         return p1[1] + t * (p2[1] - p1[1]);
       }
     }
-    return 120;
+    return 140;
   }
 
   getCurrentTotalRatio() {
@@ -41,56 +41,41 @@ export class Engine {
     return this.gearRatios[this.currentGear - 1] * this.finalDrive;
   }
 
-  /**
-   * Update engine state and automatic gearbox transitions (including Reverse).
-   * @param {number} throttle 0..1
-   * @param {number} brake 0..1
-   * @param {number} speedKmH Current vehicle speed (km/h)
-   * @param {number} drivenWheelsAvgRadSec Average angular velocity of driven wheels
-   * @param {number} dt Physics timestep (s)
-   */
   update(throttle, brake, speedKmH, drivenWheelsAvgRadSec, dt) {
     if (this.shiftCooldown > 0) {
       this.shiftCooldown -= dt;
     }
 
-    // --- Automatic Forward / Reverse Gear Switching ---
+    // Automatic Forward / Reverse Gear Switching
     if (this.shiftCooldown <= 0) {
-      // Switch to Reverse if nearly stopped and pressing Brake
-      if (this.currentGear > 0 && speedKmH < 3.0 && brake > 0.3 && throttle < 0.1) {
+      if (this.currentGear > 0 && speedKmH < 2.0 && brake > 0.3 && throttle < 0.1) {
         this.currentGear = -1;
         this.shiftCooldown = 0.5;
-      }
-      // Switch back to Forward 1st gear if in Reverse, nearly stopped and pressing Throttle
-      else if (this.currentGear === -1 && speedKmH < 3.0 && throttle > 0.3 && brake < 0.1) {
+      } else if (this.currentGear === -1 && speedKmH < 2.0 && throttle > 0.3 && brake < 0.1) {
         this.currentGear = 1;
         this.shiftCooldown = 0.5;
       }
     }
 
-    // Resolve active drive input based on current gear
     let effectiveThrottle = 0;
     if (this.currentGear > 0) {
       effectiveThrottle = throttle;
     } else if (this.currentGear === -1) {
-      // In reverse, brake pedal acts as reverse accelerator
       effectiveThrottle = brake;
     }
 
     const totalRatio = this.getCurrentTotalRatio();
 
-    // RPM calculations
     if (this.currentGear === 0) {
       this.currentRPM += (effectiveThrottle * 5000 - (this.currentRPM - this.idleRPM) * 3) * dt;
     } else {
       const wheelRPM = (Math.abs(drivenWheelsAvgRadSec) * 60) / (2 * Math.PI);
-      const targetRPM = wheelRPM * Math.abs(totalRatio);
-      this.currentRPM += (targetRPM - this.currentRPM) * Math.min(1.0, dt * 12);
+      const targetRPM = Math.max(this.idleRPM + effectiveThrottle * 1500, wheelRPM * Math.abs(totalRatio));
+      this.currentRPM += (targetRPM - this.currentRPM) * Math.min(1.0, dt * 15);
     }
 
     this.currentRPM = Math.max(this.idleRPM, Math.min(this.maxRPM, this.currentRPM));
 
-    // Auto upshift / downshift in forward gears
     if (this.shiftCooldown <= 0 && this.currentGear > 0) {
       if (this.currentRPM > this.upshiftRPM && this.currentGear < this.gearRatios.length) {
         this.currentGear++;
@@ -101,7 +86,6 @@ export class Engine {
       }
     }
 
-    // Engine torque output
     const rawTorque = this.getTorqueAtRPM(this.currentRPM);
     let engineTorque = rawTorque * effectiveThrottle;
 

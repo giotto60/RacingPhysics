@@ -1,5 +1,5 @@
 /**
- * Wheel.js — Individual wheel dynamics & ground raycast contact with low-speed stability.
+ * Wheel.js — Individual wheel dynamics & ground raycast contact.
  */
 import { Vec3 } from './math/Vec3.js';
 import { Quat } from './math/Quat.js';
@@ -9,29 +9,25 @@ export class Wheel {
     this.id = config.id;
     this.isDriven = config.driven || false;
     this.radius = config.radius || 0.32;
-    this.maxBrakeTorque = config.maxBrakeTorque || 3200;
+    this.maxBrakeTorque = config.maxBrakeTorque || 3400;
     this.inertia = config.wheelInertia || 1.2;
 
-    // Body-space attachment position
     this.localAttachPos = new Vec3(config.x, config.y, config.z);
 
-    // State
     this.steerAngle = 0;
-    this.suspensionRestLength = config.restLength || 0.30;
+    this.suspensionRestLength = config.restLength || 0.25;
     this.suspensionLength = this.suspensionRestLength;
     this.prevSuspensionLength = this.suspensionRestLength;
     this.angularVelocity = 0;
     this.rotationAngle = 0;
     this.isGrounded = false;
 
-    // Calculated physics values
     this.slipRatio = 0;
     this.slipAngle = 0;
     this.Fx = 0;
     this.Fy = 0;
     this.Fz = 0;
 
-    // Pre-allocated vectors for zero-allocation hot path
     this.worldAttachPos = new Vec3();
     this.worldRayDir    = new Vec3();
     this.contactPoint   = new Vec3();
@@ -39,10 +35,6 @@ export class Wheel {
     this.wheelHeading   = new Vec3(0, 0, 1);
     this.wheelRight     = new Vec3(1, 0, 0);
     this.wheelVelocity  = new Vec3();
-    this.totalForceWorld= new Vec3();
-
-    this.visualPosition = new Vec3();
-    this.visualRotation = new Quat();
   }
 
   reset() {
@@ -66,7 +58,8 @@ export class Wheel {
     const downLocal = new Vec3(0, -1, 0);
     chassisQuat.rotateVec3(downLocal, this.worldRayDir);
 
-    const maxDistance = this.suspensionRestLength + this.radius;
+    // Max distance includes small 0.08m extension tolerance to prevent premature ungrounding
+    const maxDistance = this.suspensionRestLength + this.radius + 0.08;
 
     if (this.worldRayDir.y < -1e-5) {
       const distToGround = (this.worldAttachPos.y - 0) / (-this.worldRayDir.y);
@@ -74,7 +67,7 @@ export class Wheel {
       if (distToGround >= 0 && distToGround <= maxDistance) {
         this.isGrounded = true;
         this.prevSuspensionLength = this.suspensionLength;
-        this.suspensionLength = Math.max(0.05, distToGround - this.radius);
+        this.suspensionLength = Math.max(0.02, Math.min(this.suspensionRestLength, distToGround - this.radius));
 
         Vec3.addScaled(this.worldAttachPos, this.worldRayDir, distToGround, this.contactPoint);
         this.contactNormal.set(0, 1, 0);
@@ -114,19 +107,19 @@ export class Wheel {
 
     const vWheel = this.angularVelocity * this.radius;
 
-    // Longitudinal slip ratio
+    // Longitudinal slip ratio kappa = (vWheel - vLong) / max(|vLong|, |vWheel|, 1.0)
     const denomRatio = Math.max(Math.abs(vLong), Math.abs(vWheel), 1.0);
     this.slipRatio = (vWheel - vLong) / denomRatio;
 
-    // Lateral slip angle
+    // Lateral slip angle alpha = atan2(vLat, max(0.5, |vLong|))
     this.slipAngle = Math.atan2(vLat, Math.max(0.5, Math.abs(vLong)));
 
-    // Low-speed scaling to prevent micro-chatter at rest
-    const speedMag = Math.abs(vLong);
-    if (speedMag < 1.0) {
-      const lowSpeedFactor = speedMag; // Linear ramp down below 1 m/s
-      this.slipRatio *= lowSpeedFactor;
-      this.slipAngle *= lowSpeedFactor;
+    // Smooth low-speed stabilization: only damp slip when BOTH car motion AND wheel spin are near zero
+    const totalActivity = Math.abs(vLong) + Math.abs(vWheel);
+    if (totalActivity < 0.5) {
+      const lowSpeedDamp = totalActivity / 0.5;
+      this.slipRatio *= lowSpeedDamp;
+      this.slipAngle *= lowSpeedDamp;
     }
   }
 
@@ -139,10 +132,8 @@ export class Wheel {
       netTorque -= this.Fx * this.radius;
     }
 
-    // Static / Dynamic Brake Torque
     if (brakeTorque > 0) {
       if (Math.abs(this.angularVelocity) < 0.5 && Math.abs(driveTorque) < 10) {
-        // Full stop hold
         this.angularVelocity = 0;
         netTorque = 0;
       } else {
@@ -154,7 +145,6 @@ export class Wheel {
 
     const alpha = netTorque / this.inertia;
     this.angularVelocity += alpha * dt;
-
     this.rotationAngle += this.angularVelocity * dt;
   }
 }
