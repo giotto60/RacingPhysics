@@ -1,5 +1,5 @@
 /**
- * Vehicle.js — Top-level vehicle assembly with Anti-Roll Bars and speed-sensitive steering.
+ * Vehicle.js — Top-level vehicle assembly with unconstrained physics & natural Anti-Roll Bars.
  */
 import { RigidBody } from './RigidBody.js';
 import { Engine } from './Engine.js';
@@ -17,8 +17,8 @@ export class Vehicle {
     this.suspension = new Suspension(carConfig.suspension);
     this.tyreModel  = new TyreModel(carConfig.tyre.pacejka);
 
-    this.arbFront = carConfig.suspension.antiRollBarFront || 20000;
-    this.arbRear  = carConfig.suspension.antiRollBarRear || 15000;
+    this.arbFront = carConfig.suspension.antiRollBarFront || 14000;
+    this.arbRear  = carConfig.suspension.antiRollBarRear || 9000;
 
     this.wheels = carConfig.wheelPositions.map(pos => new Wheel({
       ...pos,
@@ -29,7 +29,7 @@ export class Vehicle {
     }));
 
     this.steeringAngle = 0;
-    this.baseMaxSteer = 0.49;
+    this.maxSteerAngle = 0.48; // ~27 degrees constant steering angle
 
     this.wheelbase = Math.abs(carConfig.wheelPositions[0].z - carConfig.wheelPositions[2].z);
     this.trackWidth = Math.abs(carConfig.wheelPositions[0].x - carConfig.wheelPositions[1].x);
@@ -37,10 +37,10 @@ export class Vehicle {
     this.scratchTyreForceWorld = new Vec3();
     this.scratchResult = { Fx: 0, Fy: 0 };
 
-    this.reset(0, 0.50, 0);
+    this.reset(0, 0.56, 0);
   }
 
-  reset(posX = 0, posY = 0.50, posZ = 0) {
+  reset(posX = 0, posY = 0.56, posZ = 0) {
     this.rigidBody.position.set(posX, posY, posZ);
     this.rigidBody.velocity.set(0, 0, 0);
     this.rigidBody.acceleration.set(0, 0, 0);
@@ -71,14 +71,11 @@ export class Vehicle {
       Vec3.scale(this.rigidBody.angularVelocity, 0.75, this.rigidBody.angularVelocity);
     }
 
-    // 1. Speed-Sensitive Steering Limit
-    const speedFactor = Math.min(1.0, currentSpeedKmH / 120.0);
-    const activeMaxSteer = this.baseMaxSteer * (1.0 - 0.65 * speedFactor);
-
-    const targetSteer = inputs.steer * activeMaxSteer;
+    // 1. Steering input smoothing (unconstrained by artificial speed caps)
+    const targetSteer = inputs.steer * this.maxSteerAngle;
     this.steeringAngle += (targetSteer - this.steeringAngle) * Math.min(1.0, dt * 10);
 
-    // 2. Raycast ground contacts & compute spring/damper normal forces per corner
+    // 2. Raycast ground contacts & compute spring/damper normal forces
     for (const wheel of this.wheels) {
       wheel.updateGroundContact(
         this.rigidBody.position,
@@ -93,8 +90,7 @@ export class Vehicle {
       }
     }
 
-    // 3. Anti-Roll Bar (ARB) Coupling (Resists Body Roll)
-    // Front Axle (FL = 0, FR = 1)
+    // 3. Anti-Roll Bar (ARB) Coupling
     if (this.wheels[0].isGrounded || this.wheels[1].isGrounded) {
       const compFL = this.suspension.restLength - this.wheels[0].suspensionLength;
       const compFR = this.suspension.restLength - this.wheels[1].suspensionLength;
@@ -103,7 +99,6 @@ export class Vehicle {
       this.wheels[1].Fz -= arbForceFront;
     }
 
-    // Rear Axle (RL = 2, RR = 3)
     if (this.wheels[2].isGrounded || this.wheels[3].isGrounded) {
       const compRL = this.suspension.restLength - this.wheels[2].suspensionLength;
       const compRR = this.suspension.restLength - this.wheels[3].suspensionLength;

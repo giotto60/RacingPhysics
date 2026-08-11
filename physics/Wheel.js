@@ -1,5 +1,5 @@
 /**
- * Wheel.js — Wheel dynamics with 3D ramp ground height collision.
+ * Wheel.js — Pure kinematic slip ratio & slip angle calculation.
  */
 import { Vec3 } from './math/Vec3.js';
 import { Quat } from './math/Quat.js';
@@ -16,7 +16,7 @@ export class Wheel {
     this.localAttachPos = new Vec3(config.x, config.y, config.z);
 
     this.steerAngle = 0;
-    this.suspensionRestLength = config.restLength || 0.22;
+    this.suspensionRestLength = config.restLength || 0.28;
     this.suspensionLength = this.suspensionRestLength;
     this.prevSuspensionLength = this.suspensionRestLength;
     this.angularVelocity = 0;
@@ -61,7 +61,6 @@ export class Wheel {
 
     const maxDistance = this.suspensionRestLength + this.radius + 0.08;
 
-    // Evaluate floor and ramp ground elevation at wheel (x, z)
     const targetGroundY = TrackCollision.getGroundHeightAndNormal(
       this.worldAttachPos.x,
       this.worldAttachPos.z,
@@ -89,6 +88,9 @@ export class Wheel {
     this.Fy = 0;
   }
 
+  /**
+   * Pure kinematic slip ratio & slip angle calculation.
+   */
   computeSlip(chassisQuat, totalSteerAngle) {
     this.steerAngle = totalSteerAngle;
 
@@ -112,16 +114,12 @@ export class Wheel {
     const vLat  = Vec3.dot(this.wheelVelocity, this.wheelRight);
     const vWheel = this.angularVelocity * this.radius;
 
+    // Pure kinematic longitudinal slip ratio kappa = (vWheel - vLong) / max(|vLong|, |vWheel|, 1.0)
     const denomRatio = Math.max(Math.abs(vLong), Math.abs(vWheel), 1.0);
     this.slipRatio = (vWheel - vLong) / denomRatio;
-    this.slipAngle = Math.atan2(vLat, Math.max(0.5, Math.abs(vLong)));
 
-    const totalActivity = Math.abs(vLong) + Math.abs(vWheel);
-    if (totalActivity < 0.5) {
-      const lowSpeedDamp = totalActivity / 0.5;
-      this.slipRatio *= lowSpeedDamp;
-      this.slipAngle *= lowSpeedDamp;
-    }
+    // Pure kinematic lateral slip angle alpha = atan2(vLat, max(0.5, |vLong|))
+    this.slipAngle = Math.atan2(vLat, Math.max(0.5, Math.abs(vLong)));
   }
 
   integrateWheelSpin(driveTorque, brakeInput, dt) {

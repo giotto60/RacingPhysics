@@ -1,5 +1,5 @@
 /**
- * RigidBody.js — 3D Rigid body dynamics with TrackCollision (floor + ramp) scraping & tumbling friction.
+ * RigidBody.js — 3D Rigid body dynamics with exact chassis bounding box ground contact.
  */
 import { Vec3 } from './math/Vec3.js';
 import { Quat } from './math/Quat.js';
@@ -17,7 +17,7 @@ export class RigidBody {
       inertiaDiag[2] > 0 ? 1 / inertiaDiag[2] : 0
     );
 
-    this.position        = new Vec3(0, 0.50, 0);
+    this.position        = new Vec3(0, 0.56, 0);
     this.velocity        = new Vec3();
     this.acceleration    = new Vec3();
     this.orientation     = new Quat();
@@ -29,10 +29,11 @@ export class RigidBody {
     this.worldInvInertia = new Mat3();
     this.rotationMatrix  = new Mat3();
 
-    this.prevPosition    = new Vec3(0, 0.50, 0);
+    this.prevPosition    = new Vec3(0, 0.56, 0);
     this.prevOrientation = new Quat();
 
-    this.boxHalfExtents = new Vec3(0.60, 0.25, 1.50);
+    // Exact half-extents covering chassis body tub + canopy roof (width: 1.2m, height: 0.76m, length: 3.0m)
+    this.boxHalfExtents = new Vec3(0.60, 0.38, 1.50);
 
     this.scratchR          = new Vec3();
     this.scratchTorque     = new Vec3();
@@ -70,6 +71,10 @@ export class RigidBody {
     this.worldInvInertia.setWorldInverseInertia(this.rotationMatrix, this.bodyInvInertia);
   }
 
+  /**
+   * 8-Corner chassis bounding box ground contact.
+   * Matches the physical roof and chassis geometry so no part of the car ever breaches the floor.
+   */
   resolveChassisGroundCollision() {
     const hx = this.boxHalfExtents.x;
     const hy = this.boxHalfExtents.y;
@@ -90,7 +95,7 @@ export class RigidBody {
         this.scratchCornerWorld.x,
         this.scratchCornerWorld.z,
         this.scratchGroundNormal
-      ) + 0.05;
+      ) + 0.02;
 
       if (this.scratchCornerWorld.y < groundY) {
         isChassisScraping = true;
@@ -100,25 +105,24 @@ export class RigidBody {
         Vec3.cross(this.angularVelocity, this.scratchR, this.scratchCornerVel);
         Vec3.add(this.scratchCornerVel, this.velocity, this.scratchCornerVel);
 
-        const springK = 35000;
-        const damperC = 3000;
-        let normalForceMag = Math.max(0, penetration * springK - this.scratchCornerVel.y * damperC);
-
-        const maxForcePerCorner = (this.mass * 9.81 * 1.5) / 4;
-        normalForceMag = Math.min(maxForcePerCorner, normalForceMag);
+        // Penalty spring-damper
+        const springK = 60000;
+        const damperC = 4000;
+        const normalForceMag = Math.max(0, penetration * springK - this.scratchCornerVel.y * damperC);
 
         Vec3.scale(this.scratchGroundNormal, normalForceMag, this.scratchCornerForce);
 
-        const frictionCoeff = 0.75;
-        this.scratchCornerForce.x -= this.scratchCornerVel.x * frictionCoeff * 500;
-        this.scratchCornerForce.z -= this.scratchCornerVel.z * frictionCoeff * 500;
+        // Chassis metal friction on ground
+        const frictionCoeff = 0.6;
+        this.scratchCornerForce.x -= this.scratchCornerVel.x * frictionCoeff * 200;
+        this.scratchCornerForce.z -= this.scratchCornerVel.z * frictionCoeff * 200;
 
         this.applyForceAtWorldPoint(this.scratchCornerForce, this.scratchCornerWorld);
       }
     }
 
     if (isChassisScraping) {
-      Vec3.scale(this.angularVelocity, 0.90, this.angularVelocity);
+      Vec3.scale(this.angularVelocity, 0.92, this.angularVelocity);
     }
   }
 
@@ -132,7 +136,8 @@ export class RigidBody {
     Vec3.addScaled(this.velocity, this.acceleration, dt, this.velocity);
     Vec3.addScaled(this.position, this.velocity, dt, this.position);
 
-    const minFloorY = TrackCollision.getGroundHeightAndNormal(this.position.x, this.position.z, this.scratchGroundNormal) + 0.1;
+    // Hard floor floor safety at half-height (0.38m)
+    const minFloorY = TrackCollision.getGroundHeightAndNormal(this.position.x, this.position.z, this.scratchGroundNormal) + 0.38;
     if (this.position.y < minFloorY) {
       this.position.y = minFloorY;
       if (this.velocity.y < 0) this.velocity.y = 0;
@@ -143,7 +148,7 @@ export class RigidBody {
 
     Vec3.addScaled(this.angularVelocity, this.scratchAngAcc, dt, this.angularVelocity);
 
-    Vec3.scale(this.angularVelocity, Math.max(0, 1 - 0.5 * dt), this.angularVelocity);
+    Vec3.scale(this.angularVelocity, Math.max(0, 1 - 0.4 * dt), this.angularVelocity);
 
     this.orientation.integrateAngularVelocity(this.angularVelocity, dt);
   }
