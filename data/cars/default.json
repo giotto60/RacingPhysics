@@ -1,0 +1,61 @@
+/**
+ * default.json — Car specification for the test vehicle.
+ *
+ * A rear-wheel-drive sports car, roughly equivalent to a Mazda MX-5 class car.
+ * All values in SI units (kg, N, m, Nm, rad/s).
+ */
+{
+  "name": "Test Car",
+  "mass": 1150,
+
+  "centerOfMass": { "x": 0.0, "y": -0.05, "z": 0.05 },
+
+  "inertiaDiag": [420, 1400, 1200],
+
+  "drivetrain": "RWD",
+
+  "engine": {
+    "idleRPM": 900,
+    "maxRPM": 7800,
+    "upshiftRPM": 6800,
+    "downshiftRPM": 2500,
+    "torqueCurve": [
+      [0,    120],
+      [1000, 220],
+      [2000, 310],
+      [3500, 390],
+      [5000, 370],
+      [6500, 320],
+      [7800, 180]
+    ],
+    "gearRatios": [3.6, 2.2, 1.5, 1.1, 0.85, 0.72],
+    "finalDrive": 3.9,
+    "reverseRatio": 3.3
+  },
+
+  "suspension": {
+    "restLength":     0.30,
+    "springRate":     32000,
+    "damperBump":     3200,
+    "damperRebound":  4000,
+    "bumpSteerCoeff": 0.0025
+  },
+
+  "tyre": {
+    "radius": 0.32,
+    "wheelInertia": 1.2,
+    "maxBrakeTorque": 2800,
+    "pacejka": {
+      "longitudinal": { "B": 12, "C": 1.65, "E": 0.3 },
+      "lateral":      { "B": 9,  "C": 1.35, "E": -0.4 },
+      "loadSensitivity": { "a1": -0.00009, "a2": 1.55 }
+    }
+  },
+
+  "wheelPositions": [
+    { "id": "FL", "driven": false, "x": -0.74, "y": -0.18, "z":  1.22 },
+    { "id": "FR", "driven": false, "x":  0.74, "y": -0.18, "z":  1.22 },
+    { "id": "RL", "driven": true,  "x": -0.74, "y": -0.18, "z": -1.22 },
+    { "id": "RR", "driven": true,  "x":  0.74, "y": -0.18, "z": -1.22 }
+  ]
+}

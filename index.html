@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RacingPhysics — Test Environment</title>
+
+  <!-- Three.js via importmap (no build step needed) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js"
+    }
+  }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Outfit:wght@300;600;800&display=swap');
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #080810;
+      overflow: hidden;
+      font-family: 'Share Tech Mono', monospace;
+      color: #e0e0f0;
+    }
+
+    #canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* ── HUD ─────────────────────────────────────────── */
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* Speed — top centre */
+    #speed-panel {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      background: rgba(10,10,20,0.65);
+      border: 1px solid rgba(120,160,255,0.2);
+      border-radius: 12px;
+      padding: 10px 28px 8px;
+      backdrop-filter: blur(8px);
+    }
+    #speed-value {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 56px;
+      line-height: 1;
+      color: #a0cfff;
+      text-shadow: 0 0 24px rgba(120,180,255,0.5);
+    }
+    #speed-unit {
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: rgba(160,207,255,0.5);
+      margin-top: 2px;
+    }
+
+    /* Gear — top right */
+    #gear-panel {
+      position: absolute;
+      top: 24px;
+      right: 28px;
+      background: rgba(10,10,20,0.65);
+      border: 1px solid rgba(120,160,255,0.2);
+      border-radius: 12px;
+      padding: 8px 20px;
+      backdrop-filter: blur(8px);
+      text-align: center;
+    }
+    #gear-label { font-size: 10px; letter-spacing: 2px; color: rgba(200,200,255,0.4); }
+    #gear-value {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 40px;
+      color: #ffe080;
+      line-height: 1.1;
+      text-shadow: 0 0 16px rgba(255,220,80,0.4);
+    }
+
+    /* RPM bar — bottom centre */
+    #rpm-panel {
+      position: absolute;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 360px;
+      background: rgba(10,10,20,0.65);
+      border: 1px solid rgba(120,160,255,0.15);
+      border-radius: 10px;
+      padding: 10px 16px;
+      backdrop-filter: blur(8px);
+    }
+    #rpm-label { font-size: 9px; letter-spacing: 2px; color: rgba(200,200,255,0.4); margin-bottom: 5px; }
+    #rpm-bar-bg {
+      width: 100%;
+      height: 8px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    #rpm-bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #4080ff, #80c0ff, #ff6060);
+      transition: background 0.1s;
+    }
+    #rpm-value { font-size: 11px; color: rgba(180,200,255,0.6); margin-top: 4px; text-align: right; }
+
+    /* Input bars — bottom left */
+    #inputs-panel {
+      position: absolute;
+      bottom: 32px;
+      left: 28px;
+      width: 140px;
+      background: rgba(10,10,20,0.65);
+      border: 1px solid rgba(120,160,255,0.15);
+      border-radius: 10px;
+      padding: 10px 14px;
+      backdrop-filter: blur(8px);
+    }
+    .input-row { margin-bottom: 8px; }
+    .input-row:last-child { margin-bottom: 0; }
+    .input-label { font-size: 9px; letter-spacing: 2px; color: rgba(200,200,255,0.4); margin-bottom: 3px; }
+    .input-bar-bg {
+      width: 100%;
+      height: 5px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    #throttle-fill { height:100%; width:0%; border-radius:3px; background:#40c060; }
+    #brake-fill    { height:100%; width:0%; border-radius:3px; background:#e05050; }
+    #steer-wrap { position:relative; height:5px; background:rgba(255,255,255,0.07); border-radius:3px; overflow:hidden; }
+    #steer-fill { position:absolute; top:0; height:100%; background:#a080ff; border-radius:3px; }
+
+    /* Telemetry — bottom right */
+    #tele-panel {
+      position: absolute;
+      bottom: 32px;
+      right: 28px;
+      width: 200px;
+      background: rgba(10,10,20,0.65);
+      border: 1px solid rgba(120,160,255,0.15);
+      border-radius: 10px;
+      padding: 10px 14px;
+      backdrop-filter: blur(8px);
+      font-size: 10px;
+    }
+    #tele-panel .tele-header {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: rgba(200,200,255,0.4);
+      margin-bottom: 7px;
+    }
+    .tele-wheel {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+      color: rgba(200,220,255,0.7);
+    }
+    .tele-wheel span:first-child { color: rgba(200,200,255,0.4); }
+    .tele-slip { color: #80e0ff; }
+    .tele-load { color: #ffe080; }
+
+    /* Controls hint — top left */
+    #controls-hint {
+      position: absolute;
+      top: 24px;
+      left: 28px;
+      background: rgba(10,10,20,0.55);
+      border: 1px solid rgba(120,160,255,0.12);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 10px;
+      line-height: 1.8;
+      color: rgba(180,200,255,0.5);
+      backdrop-filter: blur(8px);
+    }
+    #controls-hint kbd {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: 9px;
+      color: rgba(220,230,255,0.7);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="hud">
+
+    <!-- Speed -->
+    <div id="speed-panel">
+      <div id="speed-value">0</div>
+      <div id="speed-unit">KM / H</div>
+    </div>
+
+    <!-- Gear -->
+    <div id="gear-panel">
+      <div id="gear-label">GEAR</div>
+      <div id="gear-value">1</div>
+    </div>
+
+    <!-- RPM -->
+    <div id="rpm-panel">
+      <div id="rpm-label">RPM</div>
+      <div id="rpm-bar-bg"><div id="rpm-bar-fill"></div></div>
+      <div id="rpm-value">0</div>
+    </div>
+
+    <!-- Inputs -->
+    <div id="inputs-panel">
+      <div class="input-row">
+        <div class="input-label">THROTTLE</div>
+        <div class="input-bar-bg"><div id="throttle-fill"></div></div>
+      </div>
+      <div class="input-row">
+        <div class="input-label">BRAKE</div>
+        <div class="input-bar-bg"><div id="brake-fill"></div></div>
+      </div>
+      <div class="input-row">
+        <div class="input-label">STEER</div>
+        <div id="steer-wrap"><div id="steer-fill"></div></div>
+      </div>
+    </div>
+
+    <!-- Tyre telemetry -->
+    <div id="tele-panel">
+      <div class="tele-header">TYRE LOADS &amp; SLIP</div>
+      <div class="tele-wheel" id="tw-fl"><span>FL</span> <span class="tele-load" id="tl-fl">0 N</span> <span class="tele-slip" id="ts-fl">0°</span></div>
+      <div class="tele-wheel" id="tw-fr"><span>FR</span> <span class="tele-load" id="tl-fr">0 N</span> <span class="tele-slip" id="ts-fr">0°</span></div>
+      <div class="tele-wheel" id="tw-rl"><span>RL</span> <span class="tele-load" id="tl-rl">0 N</span> <span class="tele-slip" id="ts-rl">0°</span></div>
+      <div class="tele-wheel" id="tw-rr"><span>RR</span> <span class="tele-load" id="tl-rr">0 N</span> <span class="tele-slip" id="ts-rr">0°</span></div>
+    </div>
+
+    <!-- Controls hint -->
+    <div id="controls-hint">
+      <kbd>W</kbd> Throttle &nbsp; <kbd>S</kbd> Brake<br>
+      <kbd>A</kbd><kbd>D</kbd> Steer &nbsp; <kbd>R</kbd> Reset
+    </div>
+
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
