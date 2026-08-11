@@ -1,5 +1,5 @@
 /**
- * Vehicle.js — Top-level vehicle assembly with speed-sensitive steering scale.
+ * Vehicle.js — Top-level vehicle assembly with Anti-Roll Bars and speed-sensitive steering.
  */
 import { RigidBody } from './RigidBody.js';
 import { Engine } from './Engine.js';
@@ -17,6 +17,9 @@ export class Vehicle {
     this.suspension = new Suspension(carConfig.suspension);
     this.tyreModel  = new TyreModel(carConfig.tyre.pacejka);
 
+    this.arbFront = carConfig.suspension.antiRollBarFront || 20000;
+    this.arbRear  = carConfig.suspension.antiRollBarRear || 15000;
+
     this.wheels = carConfig.wheelPositions.map(pos => new Wheel({
       ...pos,
       radius: carConfig.tyre.radius,
@@ -26,7 +29,7 @@ export class Vehicle {
     }));
 
     this.steeringAngle = 0;
-    this.baseMaxSteer = 0.49; // ~28 degrees at low speed
+    this.baseMaxSteer = 0.49;
 
     this.wheelbase = Math.abs(carConfig.wheelPositions[0].z - carConfig.wheelPositions[2].z);
     this.trackWidth = Math.abs(carConfig.wheelPositions[0].x - carConfig.wheelPositions[1].x);
@@ -63,20 +66,19 @@ export class Vehicle {
     const currentSpeedMs = this.rigidBody.velocity.length();
     const currentSpeedKmH = currentSpeedMs * 3.6;
 
-    // Static Holding Brake when stopped
     if (inputs.brake > 0.1 && inputs.throttle < 0.1 && currentSpeedKmH < 1.5 && this.engine.currentGear > 0) {
       Vec3.scale(this.rigidBody.velocity, 0.75, this.rigidBody.velocity);
       Vec3.scale(this.rigidBody.angularVelocity, 0.75, this.rigidBody.angularVelocity);
     }
 
-    // 1. Speed-Sensitive Steering Limit (28 deg down to 10 deg at 120 km/h)
+    // 1. Speed-Sensitive Steering Limit
     const speedFactor = Math.min(1.0, currentSpeedKmH / 120.0);
     const activeMaxSteer = this.baseMaxSteer * (1.0 - 0.65 * speedFactor);
 
     const targetSteer = inputs.steer * activeMaxSteer;
     this.steeringAngle += (targetSteer - this.steeringAngle) * Math.min(1.0, dt * 10);
 
-    // 2. Raycast ground contacts & compute natural suspension forces
+    // 2. Raycast ground contacts & compute spring/damper normal forces per corner
     for (const wheel of this.wheels) {
       wheel.updateGroundContact(
         this.rigidBody.position,
@@ -91,7 +93,28 @@ export class Vehicle {
       }
     }
 
-    // 3. Update Engine & Gearbox
+    // 3. Anti-Roll Bar (ARB) Coupling (Resists Body Roll)
+    // Front Axle (FL = 0, FR = 1)
+    if (this.wheels[0].isGrounded || this.wheels[1].isGrounded) {
+      const compFL = this.suspension.restLength - this.wheels[0].suspensionLength;
+      const compFR = this.suspension.restLength - this.wheels[1].suspensionLength;
+      const arbForceFront = (compFL - compFR) * this.arbFront;
+      this.wheels[0].Fz += arbForceFront;
+      this.wheels[1].Fz -= arbForceFront;
+    }
+
+    // Rear Axle (RL = 2, RR = 3)
+    if (this.wheels[2].isGrounded || this.wheels[3].isGrounded) {
+      const compRL = this.suspension.restLength - this.wheels[2].suspensionLength;
+      const compRR = this.suspension.restLength - this.wheels[3].suspensionLength;
+      const arbForceRear = (compRL - compRR) * this.arbRear;
+      this.wheels[2].Fz += arbForceRear;
+      this.wheels[3].Fz -= arbForceRear;
+    }
+
+    for (const w of this.wheels) w.Fz = Math.max(0, w.Fz);
+
+    // 4. Update Engine & Gearbox
     const drivenWheels = this.wheels.filter(w => w.isDriven);
     const avgRadSec = drivenWheels.reduce((sum, w) => sum + w.angularVelocity, 0) / drivenWheels.length;
 
@@ -99,7 +122,7 @@ export class Vehicle {
 
     const torquePerWheel = drivenWheels.length > 0 ? this.engine.outputTorque / drivenWheels.length : 0;
 
-    // 4. Calculate Tyre Forces per Wheel
+    // 5. Calculate Tyre Forces per Wheel
     for (let i = 0; i < this.wheels.length; i++) {
       const wheel = this.wheels[i];
       const isFront = i < 2;
@@ -132,7 +155,7 @@ export class Vehicle {
       }
     }
 
-    // 5. Integrate Chassis Rigid Body
+    // 6. Integrate Chassis Rigid Body
     this.rigidBody.integrate(dt);
   }
 }

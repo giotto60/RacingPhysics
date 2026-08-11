@@ -1,6 +1,5 @@
 /**
- * Renderer.js — Three.js Scene, Camera, Lighting, and Car Visual Mesh setup.
- * Aligned 3D visual wheel mesh rotations with physics steering angle.
+ * Renderer.js — Three.js Scene with 3000m Ground Grid, Goodyear Tire Markings, and 3D Jump Ramps.
  */
 import * as THREE from 'three';
 
@@ -20,41 +19,43 @@ export class Renderer {
     this.threeRenderer.toneMapping = THREE.ACESFilmicToneMapping;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x161e33);
-    this.scene.fog = new THREE.FogExp2(0x161e33, 0.005);
+    this.scene.background = new THREE.Color(0x141c30);
+    this.scene.fog = new THREE.FogExp2(0x141c30, 0.003);
 
-    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
+    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.cameraTarget = new THREE.Vector3(0, 0.7, 0);
     this.cameraPos = new THREE.Vector3(0, 3.2, -6.5);
     this.camera.position.copy(this.cameraPos);
     this.camera.lookAt(this.cameraTarget);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
     this.scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    dirLight.position.set(20, 40, 20);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.6);
+    dirLight.position.set(40, 80, 40);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048;
     dirLight.shadow.mapSize.height = 2048;
     dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 150;
-    dirLight.shadow.camera.left = -40;
-    dirLight.shadow.camera.right = 40;
-    dirLight.shadow.camera.top = 40;
-    dirLight.shadow.camera.bottom = -40;
+    dirLight.shadow.camera.far = 250;
+    dirLight.shadow.camera.left = -80;
+    dirLight.shadow.camera.right = 80;
+    dirLight.shadow.camera.top = 80;
+    dirLight.shadow.camera.bottom = -80;
     this.scene.add(dirLight);
 
     this.createGround();
+    this.createJumpRamps();
     this.createCarMesh();
 
     window.addEventListener('resize', () => this.onWindowResize());
   }
 
   createGround() {
-    const planeGeo = new THREE.PlaneGeometry(600, 600);
+    // 3000m x 3000m Large Ground Plane
+    const planeGeo = new THREE.PlaneGeometry(3000, 3000);
     const planeMat = new THREE.MeshStandardMaterial({
-      color: 0x1f273d,
+      color: 0x1a233a,
       roughness: 0.7,
       metalness: 0.1
     });
@@ -63,9 +64,122 @@ export class Renderer {
     ground.receiveShadow = true;
     this.scene.add(ground);
 
-    const grid = new THREE.GridHelper(600, 300, 0x60a5fa, 0x334155);
+    const grid = new THREE.GridHelper(3000, 1500, 0x60a5fa, 0x2e3b59);
     grid.position.y = 0.01;
     this.scene.add(grid);
+  }
+
+  createJumpRamps() {
+    const rampData = [
+      { name: "Speed Ramp (10°)", x: 0, z: 60, width: 10, length: 12, height: 2.0 },
+      { name: "Big Launch Ramp (20°)", x: -40, z: 120, width: 12, length: 16, height: 4.5 },
+      { name: "Mega Kicker Ramp (30°)", x: 40, z: 180, width: 15, length: 20, height: 7.0 }
+    ];
+
+    const rampMat = new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      roughness: 0.5,
+      metalness: 0.3
+    });
+
+    const stripeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 }); // Caution Yellow
+
+    rampData.forEach(r => {
+      const group = new THREE.Group();
+
+      // Wedge geometry for ramp
+      const shape = new THREE.Shape();
+      shape.moveTo(0, 0);
+      shape.lineTo(r.length, r.height);
+      shape.lineTo(r.length, 0);
+      shape.closePath();
+
+      const extrudeSettings = {
+        steps: 1,
+        depth: r.width,
+        bevelEnabled: false
+      };
+
+      const rampGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      rampGeo.rotateY(-Math.PI / 2);
+      rampGeo.translate(r.width * 0.5, 0, -r.length * 0.5);
+
+      const rampMesh = new THREE.Mesh(rampGeo, rampMat);
+      rampMesh.castShadow = true;
+      rampMesh.receiveShadow = true;
+      group.add(rampMesh);
+
+      // Yellow caution stripes along ramp lip
+      const lipGeo = new THREE.BoxGeometry(r.width, 0.15, 0.3);
+      const lipMesh = new THREE.Mesh(lipGeo, stripeMat);
+      lipMesh.position.set(0, r.height, r.length * 0.5 - 0.15);
+      group.add(lipMesh);
+
+      group.position.set(r.x, 0, r.z);
+      this.scene.add(group);
+    });
+  }
+
+  /**
+   * Procedurally generate a 512x512 canvas texture with white "GOODYEAR" lettering.
+   */
+  createGoodyearTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+
+    // Tire tread background
+    ctx.fillStyle = '#181f2a';
+    ctx.fillRect(0, 0, 512, 512);
+
+    // Outer tire wall ring
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.arc(256, 256, 230, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // White rim accent line
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(256, 256, 140, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Goodyear Text along top and bottom arc
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 34px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Top text: "GOODYEAR"
+    ctx.save();
+    ctx.translate(256, 256);
+    ctx.fillText('GOODYEAR', 0, -185);
+    ctx.restore();
+
+    // Bottom text: "EAGLE F1"
+    ctx.save();
+    ctx.translate(256, 256);
+    ctx.rotate(Math.PI);
+    ctx.fillText('EAGLE F1', 0, -185);
+    ctx.restore();
+
+    // 5-Spoke Alloy Pattern in center
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 16;
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * Math.PI * 2) / 5;
+      ctx.beginPath();
+      ctx.moveTo(256, 256);
+      ctx.lineTo(256 + Math.cos(angle) * 130, 256 + Math.sin(angle) * 130);
+      ctx.stroke();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.anisotropy = 8;
+    return texture;
   }
 
   createCarMesh() {
@@ -74,7 +188,7 @@ export class Renderer {
     // Central Chassis Tub
     const bodyGeo = new THREE.BoxGeometry(1.2, 0.42, 3.0);
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x2563eb, // Royal Blue
+      color: 0x2563eb,
       roughness: 0.2,
       metalness: 0.5
     });
@@ -84,7 +198,7 @@ export class Renderer {
     this.bodyMesh.receiveShadow = true;
     this.carGroup.add(this.bodyMesh);
 
-    // Aerodynamic Canopy Roof
+    // Aerodynamic Low Canopy Roof
     const roofGeo = new THREE.BoxGeometry(0.95, 0.35, 1.4);
     const roofMat = new THREE.MeshStandardMaterial({
       color: 0x0f172a,
@@ -96,7 +210,7 @@ export class Renderer {
     roofMesh.castShadow = true;
     this.carGroup.add(roofMesh);
 
-    // Wishbone Axle Brackets
+    // Axle Wishbones
     const axleGeo = new THREE.BoxGeometry(1.84, 0.08, 0.15);
     const axleMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8 });
     const frontAxle = new THREE.Mesh(axleGeo, axleMat);
@@ -125,35 +239,30 @@ export class Renderer {
     this.carGroup.add(tlLeft);
     this.carGroup.add(tlRight);
 
-    // Wheels (4 cylinders mounted outside the central tub)
+    // Wheels with Goodyear Sidewall Texture
+    const goodyearTex = this.createGoodyearTexture();
+
+    const tireFaceMat = new THREE.MeshStandardMaterial({
+      map: goodyearTex,
+      roughness: 0.4
+    });
+    const tireTreadMat = new THREE.MeshStandardMaterial({
+      color: 0x181f2a,
+      roughness: 0.8
+    });
+
+    // Materials array: 0: tread, 1: outer face, 2: inner face
+    const wheelMaterials = [tireTreadMat, tireFaceMat, tireFaceMat];
+
     this.wheelMeshes = [];
     const wheelGeo = new THREE.CylinderGeometry(0.30, 0.30, 0.24, 24);
     wheelGeo.rotateZ(Math.PI / 2);
 
-    const tireMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      roughness: 0.6
-    });
-
-    const rimGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.25, 12);
-    rimGeo.rotateZ(Math.PI / 2);
-    const rimMat = new THREE.MeshStandardMaterial({
-      color: 0xf1f5f9,
-      metalness: 0.8,
-      roughness: 0.2
-    });
-
     for (let i = 0; i < 4; i++) {
-      const wheelGroup = new THREE.Group();
-      const tire = new THREE.Mesh(wheelGeo, tireMat);
-      tire.castShadow = true;
-      const rim = new THREE.Mesh(rimGeo, rimMat);
-
-      wheelGroup.add(tire);
-      wheelGroup.add(rim);
-
-      this.scene.add(wheelGroup);
-      this.wheelMeshes.push(wheelGroup);
+      const tireMesh = new THREE.Mesh(wheelGeo, wheelMaterials);
+      tireMesh.castShadow = true;
+      this.scene.add(tireMesh);
+      this.wheelMeshes.push(tireMesh);
     }
 
     this.scene.add(this.carGroup);
@@ -181,7 +290,6 @@ export class Renderer {
 
       const isFront = i < 2;
       if (isFront && w.steerAngle !== undefined) {
-        // Rotate front wheel meshes visually around local Y
         mesh.rotateY(-w.steerAngle);
       }
 

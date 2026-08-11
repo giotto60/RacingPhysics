@@ -1,9 +1,10 @@
 /**
- * RigidBody.js — 3D Rigid body dynamics with energy-absorbing impulse ground collision & tumbling friction.
+ * RigidBody.js — 3D Rigid body dynamics with TrackCollision (floor + ramp) scraping & tumbling friction.
  */
 import { Vec3 } from './math/Vec3.js';
 import { Quat } from './math/Quat.js';
 import { Mat3 } from './math/Mat3.js';
+import { TrackCollision } from './TrackCollision.js';
 
 export class RigidBody {
   constructor(mass, inertiaDiag) {
@@ -31,7 +32,6 @@ export class RigidBody {
     this.prevPosition    = new Vec3(0, 0.50, 0);
     this.prevOrientation = new Quat();
 
-    // Chassis Bounding Box Half-extents
     this.boxHalfExtents = new Vec3(0.60, 0.25, 1.50);
 
     this.scratchR          = new Vec3();
@@ -41,6 +41,7 @@ export class RigidBody {
     this.scratchCornerWorld= new Vec3();
     this.scratchCornerVel  = new Vec3();
     this.scratchCornerForce= new Vec3();
+    this.scratchGroundNormal= new Vec3();
   }
 
   saveSnapshot() {
@@ -69,15 +70,10 @@ export class RigidBody {
     this.worldInvInertia.setWorldInverseInertia(this.rotationMatrix, this.bodyInvInertia);
   }
 
-  /**
-   * Realistic Chassis Ground Contact & Tumbling Friction.
-   * Energy-absorbing impulse model prevents artificial catapulting / mid-air launch.
-   */
   resolveChassisGroundCollision() {
     const hx = this.boxHalfExtents.x;
     const hy = this.boxHalfExtents.y;
     const hz = this.boxHalfExtents.z;
-    const groundY = 0.05;
 
     const signsX = [-1, 1, -1, 1, -1, 1, -1, 1];
     const signsY = [-1, -1, 1, 1, -1, -1, 1, 1];
@@ -90,27 +86,29 @@ export class RigidBody {
       this.orientation.rotateVec3(this.scratchCornerLocal, this.scratchCornerWorld);
       Vec3.add(this.scratchCornerWorld, this.position, this.scratchCornerWorld);
 
+      const groundY = TrackCollision.getGroundHeightAndNormal(
+        this.scratchCornerWorld.x,
+        this.scratchCornerWorld.z,
+        this.scratchGroundNormal
+      ) + 0.05;
+
       if (this.scratchCornerWorld.y < groundY) {
         isChassisScraping = true;
         const penetration = groundY - this.scratchCornerWorld.y;
 
-        // V_corner = V_body + (omega × r)
         Vec3.sub(this.scratchCornerWorld, this.position, this.scratchR);
         Vec3.cross(this.angularVelocity, this.scratchR, this.scratchCornerVel);
         Vec3.add(this.scratchCornerVel, this.velocity, this.scratchCornerVel);
 
-        // Highly damped contact force: restitution e = 0.1 absorbs crash energy
         const springK = 35000;
         const damperC = 3000;
         let normalForceMag = Math.max(0, penetration * springK - this.scratchCornerVel.y * damperC);
 
-        // Cap max normal force to 1.5x gravity to eliminate explosive energy creation
         const maxForcePerCorner = (this.mass * 9.81 * 1.5) / 4;
         normalForceMag = Math.min(maxForcePerCorner, normalForceMag);
 
-        this.scratchCornerForce.set(0, normalForceMag, 0);
+        Vec3.scale(this.scratchGroundNormal, normalForceMag, this.scratchCornerForce);
 
-        // Strong chassis friction when metal scrapes asphalt (dissipates sliding & tumbling)
         const frictionCoeff = 0.75;
         this.scratchCornerForce.x -= this.scratchCornerVel.x * frictionCoeff * 500;
         this.scratchCornerForce.z -= this.scratchCornerVel.z * frictionCoeff * 500;
@@ -119,7 +117,6 @@ export class RigidBody {
       }
     }
 
-    // Heavy angular velocity damping while chassis is scraping ground (realistic crash rest)
     if (isChassisScraping) {
       Vec3.scale(this.angularVelocity, 0.90, this.angularVelocity);
     }
@@ -135,9 +132,9 @@ export class RigidBody {
     Vec3.addScaled(this.velocity, this.acceleration, dt, this.velocity);
     Vec3.addScaled(this.position, this.velocity, dt, this.position);
 
-    // Floor floor safety
-    if (this.position.y < 0.1) {
-      this.position.y = 0.1;
+    const minFloorY = TrackCollision.getGroundHeightAndNormal(this.position.x, this.position.z, this.scratchGroundNormal) + 0.1;
+    if (this.position.y < minFloorY) {
+      this.position.y = minFloorY;
       if (this.velocity.y < 0) this.velocity.y = 0;
     }
 
@@ -146,7 +143,6 @@ export class RigidBody {
 
     Vec3.addScaled(this.angularVelocity, this.scratchAngAcc, dt, this.angularVelocity);
 
-    // Air & rotation damping
     Vec3.scale(this.angularVelocity, Math.max(0, 1 - 0.5 * dt), this.angularVelocity);
 
     this.orientation.integrateAngularVelocity(this.angularVelocity, dt);

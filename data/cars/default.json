@@ -2,9 +2,9 @@
   "name": "GT Widebody Roadster",
   "mass": 1050,
 
-  "centerOfMass": { "x": 0.0, "y": -0.25, "z": 0.0 },
+  "centerOfMass": { "x": 0.0, "y": -0.28, "z": 0.0 },
 
-  "inertiaDiag": [360, 1100, 950],
+  "inertiaDiag": [750, 1500, 1350],
 
   "drivetrain": "RWD",
 
@@ -30,9 +30,11 @@
   "suspension": {
     "restLength":     0.22,
     "springRate":     38000,
-    "damperBump":     4200,
-    "damperRebound":  5500,
-    "bumpSteerCoeff": 0.0012
+    "damperBump":     4500,
+    "damperRebound":  6000,
+    "bumpSteerCoeff": 0.0010,
+    "antiRollBarFront": 22000,
+    "antiRollBarRear": 16000
   },
 
   "tyre": {
@@ -41,8 +43,8 @@
     "maxBrakeTorque": 3200,
     "pacejka": {
       "longitudinal": { "B": 11, "C": 1.60, "E": 0.3 },
-      "lateral":      { "B": 8.5, "C": 1.30, "E": -0.4 },
-      "loadSensitivity": { "a1": -0.00008, "a2": 1.45 }
+      "lateral":      { "B": 8.0, "C": 1.25, "E": -0.2 },
+      "loadSensitivity": { "a1": -0.00007, "a2": 1.35 }
     }
   },
 

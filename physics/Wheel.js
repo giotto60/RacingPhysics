@@ -1,8 +1,9 @@
 /**
- * Wheel.js — Corrected lateral force directional vector & steering alignment.
+ * Wheel.js — Wheel dynamics with 3D ramp ground height collision.
  */
 import { Vec3 } from './math/Vec3.js';
 import { Quat } from './math/Quat.js';
+import { TrackCollision } from './TrackCollision.js';
 
 export class Wheel {
   constructor(config) {
@@ -60,8 +61,15 @@ export class Wheel {
 
     const maxDistance = this.suspensionRestLength + this.radius + 0.08;
 
+    // Evaluate floor and ramp ground elevation at wheel (x, z)
+    const targetGroundY = TrackCollision.getGroundHeightAndNormal(
+      this.worldAttachPos.x,
+      this.worldAttachPos.z,
+      this.contactNormal
+    );
+
     if (this.worldRayDir.y < -1e-5) {
-      const distToGround = (this.worldAttachPos.y - 0) / (-this.worldRayDir.y);
+      const distToGround = (this.worldAttachPos.y - targetGroundY) / (-this.worldRayDir.y);
 
       if (distToGround >= 0 && distToGround <= maxDistance) {
         this.isGrounded = true;
@@ -69,7 +77,6 @@ export class Wheel {
         this.suspensionLength = Math.max(0.02, Math.min(this.suspensionRestLength, distToGround - this.radius));
 
         Vec3.addScaled(this.worldAttachPos, this.worldRayDir, distToGround, this.contactPoint);
-        this.contactNormal.set(0, 1, 0);
         return;
       }
     }
@@ -91,8 +98,6 @@ export class Wheel {
       return;
     }
 
-    // Combine chassis orientation with steering angle
-    // In our coordinate system, steering right (+angle) rotates wheel heading clockwise around Y
     const steerQuat = new Quat().setFromAxisAngle(0, 1, 0, -totalSteerAngle);
     const localFwd = new Vec3(0, 0, 1);
     const localRight = new Vec3(1, 0, 0);
@@ -107,14 +112,10 @@ export class Wheel {
     const vLat  = Vec3.dot(this.wheelVelocity, this.wheelRight);
     const vWheel = this.angularVelocity * this.radius;
 
-    // Longitudinal slip ratio
     const denomRatio = Math.max(Math.abs(vLong), Math.abs(vWheel), 1.0);
     this.slipRatio = (vWheel - vLong) / denomRatio;
-
-    // Lateral slip angle (angle between heading and velocity)
     this.slipAngle = Math.atan2(vLat, Math.max(0.5, Math.abs(vLong)));
 
-    // Low-speed activity damping
     const totalActivity = Math.abs(vLong) + Math.abs(vWheel);
     if (totalActivity < 0.5) {
       const lowSpeedDamp = totalActivity / 0.5;
