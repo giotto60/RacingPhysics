@@ -1,5 +1,5 @@
 /**
- * Engine.js — Engine powertrain & gearbox model with automatic Reverse gear.
+ * Engine.js — Engine powertrain & gearbox model with seamless Forward / Reverse transitions.
  */
 export class Engine {
   constructor(config) {
@@ -46,21 +46,26 @@ export class Engine {
       this.shiftCooldown -= dt;
     }
 
-    // Automatic Forward / Reverse Gear Switching
+    // Seamless Forward / Reverse Gear Transitions
     if (this.shiftCooldown <= 0) {
-      if (this.currentGear > 0 && speedKmH < 2.0 && brake > 0.3 && throttle < 0.1) {
+      // In Forward gear: switch to Reverse if nearly stopped (or rolling back) and pressing Brake (S)
+      if (this.currentGear > 0 && speedKmH < 3.0 && brake > 0.2) {
         this.currentGear = -1;
-        this.shiftCooldown = 0.5;
-      } else if (this.currentGear === -1 && speedKmH < 2.0 && throttle > 0.3 && brake < 0.1) {
+        this.shiftCooldown = 0.3;
+      }
+      // In Reverse gear: switch to Forward 1st gear if nearly stopped (or rolling forward) and pressing Throttle (W)
+      else if (this.currentGear === -1 && speedKmH < 3.0 && throttle > 0.2) {
         this.currentGear = 1;
-        this.shiftCooldown = 0.5;
+        this.shiftCooldown = 0.3;
       }
     }
 
+    // Map pedal inputs according to current gear
     let effectiveThrottle = 0;
     if (this.currentGear > 0) {
       effectiveThrottle = throttle;
     } else if (this.currentGear === -1) {
+      // In Reverse, Brake pedal acts as reverse throttle
       effectiveThrottle = brake;
     }
 
@@ -76,6 +81,7 @@ export class Engine {
 
     this.currentRPM = Math.max(this.idleRPM, Math.min(this.maxRPM, this.currentRPM));
 
+    // Auto upshift / downshift in forward gears
     if (this.shiftCooldown <= 0 && this.currentGear > 0) {
       if (this.currentRPM > this.upshiftRPM && this.currentGear < this.gearRatios.length) {
         this.currentGear++;

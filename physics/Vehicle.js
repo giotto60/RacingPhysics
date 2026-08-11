@@ -1,5 +1,5 @@
 /**
- * Vehicle.js — Top-level vehicle assembly with geometric suspension weight transfer.
+ * Vehicle.js — Top-level vehicle assembly with speed-sensitive steering scale.
  */
 import { RigidBody } from './RigidBody.js';
 import { Engine } from './Engine.js';
@@ -7,7 +7,6 @@ import { Suspension } from './Suspension.js';
 import { TyreModel } from './TyreModel.js';
 import { Wheel } from './Wheel.js';
 import { Vec3 } from './math/Vec3.js';
-import { Quat } from './math/Quat.js';
 
 export class Vehicle {
   constructor(carConfig) {
@@ -27,7 +26,7 @@ export class Vehicle {
     }));
 
     this.steeringAngle = 0;
-    this.maxSteerAngle = 0.48; // ~27 degrees max steer angle
+    this.baseMaxSteer = 0.49; // ~28 degrees at low speed
 
     this.wheelbase = Math.abs(carConfig.wheelPositions[0].z - carConfig.wheelPositions[2].z);
     this.trackWidth = Math.abs(carConfig.wheelPositions[0].x - carConfig.wheelPositions[1].x);
@@ -70,11 +69,14 @@ export class Vehicle {
       Vec3.scale(this.rigidBody.angularVelocity, 0.75, this.rigidBody.angularVelocity);
     }
 
-    // 1. Steering input smoothing
-    const targetSteer = inputs.steer * this.maxSteerAngle;
+    // 1. Speed-Sensitive Steering Limit (28 deg down to 10 deg at 120 km/h)
+    const speedFactor = Math.min(1.0, currentSpeedKmH / 120.0);
+    const activeMaxSteer = this.baseMaxSteer * (1.0 - 0.65 * speedFactor);
+
+    const targetSteer = inputs.steer * activeMaxSteer;
     this.steeringAngle += (targetSteer - this.steeringAngle) * Math.min(1.0, dt * 10);
 
-    // 2. Raycast ground contacts & compute natural suspension forces per corner
+    // 2. Raycast ground contacts & compute natural suspension forces
     for (const wheel of this.wheels) {
       wheel.updateGroundContact(
         this.rigidBody.position,
@@ -105,25 +107,20 @@ export class Vehicle {
       const bumpSteer = this.suspension.getBumpSteerAngle(wheel.suspensionLength);
       const totalWheelSteer = (isFront ? this.steeringAngle : 0) + (isFront ? bumpSteer : -bumpSteer);
 
-      // Wheel contact point velocity
       Vec3.sub(wheel.worldAttachPos, this.rigidBody.position, this.scratchTyreForceWorld);
       Vec3.cross(this.rigidBody.angularVelocity, this.scratchTyreForceWorld, wheel.wheelVelocity);
       Vec3.add(wheel.wheelVelocity, this.rigidBody.velocity, wheel.wheelVelocity);
 
-      // Slip ratio and slip angle
       wheel.computeSlip(this.rigidBody.orientation, totalWheelSteer);
 
-      // Pacejka forces
       this.tyreModel.computeForces(wheel.slipRatio, wheel.slipAngle, wheel.Fz, this.scratchResult);
       wheel.Fx = this.scratchResult.Fx;
       wheel.Fy = this.scratchResult.Fy;
 
-      // Wheel spin integration
       const wheelDriveTorque = wheel.isDriven ? torquePerWheel : 0;
       const effectiveBrakeInput = this.engine.currentGear === -1 ? 0 : inputs.brake;
       wheel.integrateWheelSpin(wheelDriveTorque, effectiveBrakeInput, dt);
 
-      // Apply Tyre + Suspension forces to RigidBody
       if (wheel.isGrounded) {
         this.scratchTyreForceWorld.set(0, 0, 0);
 

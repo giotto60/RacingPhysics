@@ -1,5 +1,5 @@
 /**
- * Wheel.js — Individual wheel dynamics & ground raycast contact.
+ * Wheel.js — Corrected lateral force directional vector & steering alignment.
  */
 import { Vec3 } from './math/Vec3.js';
 import { Quat } from './math/Quat.js';
@@ -8,14 +8,14 @@ export class Wheel {
   constructor(config) {
     this.id = config.id;
     this.isDriven = config.driven || false;
-    this.radius = config.radius || 0.32;
-    this.maxBrakeTorque = config.maxBrakeTorque || 3400;
-    this.inertia = config.wheelInertia || 1.2;
+    this.radius = config.radius || 0.30;
+    this.maxBrakeTorque = config.maxBrakeTorque || 3200;
+    this.inertia = config.wheelInertia || 2.2;
 
     this.localAttachPos = new Vec3(config.x, config.y, config.z);
 
     this.steerAngle = 0;
-    this.suspensionRestLength = config.restLength || 0.25;
+    this.suspensionRestLength = config.restLength || 0.22;
     this.suspensionLength = this.suspensionRestLength;
     this.prevSuspensionLength = this.suspensionRestLength;
     this.angularVelocity = 0;
@@ -58,7 +58,6 @@ export class Wheel {
     const downLocal = new Vec3(0, -1, 0);
     chassisQuat.rotateVec3(downLocal, this.worldRayDir);
 
-    // Max distance includes small 0.08m extension tolerance to prevent premature ungrounding
     const maxDistance = this.suspensionRestLength + this.radius + 0.08;
 
     if (this.worldRayDir.y < -1e-5) {
@@ -92,7 +91,9 @@ export class Wheel {
       return;
     }
 
-    const steerQuat = new Quat().setFromAxisAngle(0, 1, 0, totalSteerAngle);
+    // Combine chassis orientation with steering angle
+    // In our coordinate system, steering right (+angle) rotates wheel heading clockwise around Y
+    const steerQuat = new Quat().setFromAxisAngle(0, 1, 0, -totalSteerAngle);
     const localFwd = new Vec3(0, 0, 1);
     const localRight = new Vec3(1, 0, 0);
 
@@ -104,17 +105,16 @@ export class Wheel {
 
     const vLong = Vec3.dot(this.wheelVelocity, this.wheelHeading);
     const vLat  = Vec3.dot(this.wheelVelocity, this.wheelRight);
-
     const vWheel = this.angularVelocity * this.radius;
 
-    // Longitudinal slip ratio kappa = (vWheel - vLong) / max(|vLong|, |vWheel|, 1.0)
+    // Longitudinal slip ratio
     const denomRatio = Math.max(Math.abs(vLong), Math.abs(vWheel), 1.0);
     this.slipRatio = (vWheel - vLong) / denomRatio;
 
-    // Lateral slip angle alpha = atan2(vLat, max(0.5, |vLong|))
+    // Lateral slip angle (angle between heading and velocity)
     this.slipAngle = Math.atan2(vLat, Math.max(0.5, Math.abs(vLong)));
 
-    // Smooth low-speed stabilization: only damp slip when BOTH car motion AND wheel spin are near zero
+    // Low-speed activity damping
     const totalActivity = Math.abs(vLong) + Math.abs(vWheel);
     if (totalActivity < 0.5) {
       const lowSpeedDamp = totalActivity / 0.5;

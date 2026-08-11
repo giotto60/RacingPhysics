@@ -1,6 +1,6 @@
 /**
  * Renderer.js — Three.js Scene, Camera, Lighting, and Car Visual Mesh setup.
- * Widebody Roadster stance with wheels mounted laterally outside the central body tub.
+ * Aligned 3D visual wheel mesh rotations with physics steering angle.
  */
 import * as THREE from 'three';
 
@@ -71,10 +71,10 @@ export class Renderer {
   createCarMesh() {
     this.carGroup = new THREE.Group();
 
-    // Central Chassis Tub (Narrower 1.2m body so wheels sit outside)
+    // Central Chassis Tub
     const bodyGeo = new THREE.BoxGeometry(1.2, 0.42, 3.0);
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x2563eb, // Electric Royal Blue
+      color: 0x2563eb, // Royal Blue
       roughness: 0.2,
       metalness: 0.5
     });
@@ -84,7 +84,7 @@ export class Renderer {
     this.bodyMesh.receiveShadow = true;
     this.carGroup.add(this.bodyMesh);
 
-    // Aerodynamic Low Canopy Roof
+    // Aerodynamic Canopy Roof
     const roofGeo = new THREE.BoxGeometry(0.95, 0.35, 1.4);
     const roofMat = new THREE.MeshStandardMaterial({
       color: 0x0f172a,
@@ -96,7 +96,7 @@ export class Renderer {
     roofMesh.castShadow = true;
     this.carGroup.add(roofMesh);
 
-    // Front/Rear Axle Suspension Wishbone Brackets (Visual connection to outer wheels)
+    // Wishbone Axle Brackets
     const axleGeo = new THREE.BoxGeometry(1.84, 0.08, 0.15);
     const axleMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8 });
     const frontAxle = new THREE.Mesh(axleGeo, axleMat);
@@ -180,8 +180,9 @@ export class Renderer {
       mesh.quaternion.copy(this.carGroup.quaternion);
 
       const isFront = i < 2;
-      if (isFront && w.steerAngle) {
-        mesh.rotateY(w.steerAngle);
+      if (isFront && w.steerAngle !== undefined) {
+        // Rotate front wheel meshes visually around local Y
+        mesh.rotateY(-w.steerAngle);
       }
 
       if (w.rotationAngle) {
