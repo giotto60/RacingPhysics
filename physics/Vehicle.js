@@ -1,5 +1,5 @@
 /**
- * Vehicle.js — Top-level vehicle assembly combining Chassis, Engine, Suspension, TyreModel, and Wheels.
+ * Vehicle.js — Top-level vehicle assembly with geometric suspension weight transfer.
  */
 import { RigidBody } from './RigidBody.js';
 import { Engine } from './Engine.js';
@@ -13,13 +13,11 @@ export class Vehicle {
   constructor(carConfig) {
     this.config = carConfig;
 
-    // Sub-assemblies
     this.rigidBody  = new RigidBody(carConfig.mass, carConfig.inertiaDiag);
     this.engine     = new Engine(carConfig.engine);
     this.suspension = new Suspension(carConfig.suspension);
     this.tyreModel  = new TyreModel(carConfig.tyre.pacejka);
 
-    // Wheels
     this.wheels = carConfig.wheelPositions.map(pos => new Wheel({
       ...pos,
       radius: carConfig.tyre.radius,
@@ -29,21 +27,18 @@ export class Vehicle {
     }));
 
     this.steeringAngle = 0;
-    this.maxSteerAngle = 0.52; // ~30 degrees max steer angle
+    this.maxSteerAngle = 0.48; // ~27 degrees max steer angle
 
-    // Vehicle dimensions for weight transfer
     this.wheelbase = Math.abs(carConfig.wheelPositions[0].z - carConfig.wheelPositions[2].z);
     this.trackWidth = Math.abs(carConfig.wheelPositions[0].x - carConfig.wheelPositions[1].x);
-    this.cgHeight   = 0.25; // Lower Center of Gravity for sports car stability
 
     this.scratchTyreForceWorld = new Vec3();
-    this.scratchTyreForceLocal = new Vec3();
     this.scratchResult = { Fx: 0, Fy: 0 };
 
-    this.reset(0, 0.60, 0);
+    this.reset(0, 0.50, 0);
   }
 
-  reset(posX = 0, posY = 0.60, posZ = 0) {
+  reset(posX = 0, posY = 0.50, posZ = 0) {
     this.rigidBody.position.set(posX, posY, posZ);
     this.rigidBody.velocity.set(0, 0, 0);
     this.rigidBody.acceleration.set(0, 0, 0);
@@ -62,11 +57,6 @@ export class Vehicle {
     }
   }
 
-  /**
-   * Step vehicle physics by timestep dt.
-   * @param {number} dt Physics timestep (s)
-   * @param {Object} inputs { throttle: 0..1, brake: 0..1, steer: -1..1 }
-   */
   step(dt, inputs) {
     this.rigidBody.saveSnapshot();
     this.rigidBody.clearAccumulators();
@@ -74,17 +64,17 @@ export class Vehicle {
     const currentSpeedMs = this.rigidBody.velocity.length();
     const currentSpeedKmH = currentSpeedMs * 3.6;
 
-    // Static Holding Brake: if stopped & holding brake without throttle, damp remaining velocity to zero
+    // Static Holding Brake when stopped
     if (inputs.brake > 0.1 && inputs.throttle < 0.1 && currentSpeedKmH < 1.5 && this.engine.currentGear > 0) {
-      Vec3.scale(this.rigidBody.velocity, 0.8, this.rigidBody.velocity);
-      Vec3.scale(this.rigidBody.angularVelocity, 0.8, this.rigidBody.angularVelocity);
+      Vec3.scale(this.rigidBody.velocity, 0.75, this.rigidBody.velocity);
+      Vec3.scale(this.rigidBody.angularVelocity, 0.75, this.rigidBody.angularVelocity);
     }
 
     // 1. Steering input smoothing
     const targetSteer = inputs.steer * this.maxSteerAngle;
     this.steeringAngle += (targetSteer - this.steeringAngle) * Math.min(1.0, dt * 10);
 
-    // 2. Raycast ground contacts for all wheels & calculate suspension forces
+    // 2. Raycast ground contacts & compute natural suspension forces per corner
     for (const wheel of this.wheels) {
       wheel.updateGroundContact(
         this.rigidBody.position,
@@ -99,21 +89,7 @@ export class Vehicle {
       }
     }
 
-    // 3. Dynamic Weight Transfer (Longitudinal + Lateral)
-    const localAcc = new Vec3();
-    this.rigidBody.orientation.inverseRotateVec3(this.rigidBody.acceleration, localAcc);
-
-    const deltaFzLong = (this.rigidBody.mass * localAcc.z * this.cgHeight) / this.wheelbase;
-    const deltaFzLat  = (this.rigidBody.mass * localAcc.x * this.cgHeight) / this.trackWidth;
-
-    if (this.wheels[0].isGrounded) this.wheels[0].Fz += deltaFzLong - deltaFzLat;
-    if (this.wheels[1].isGrounded) this.wheels[1].Fz += deltaFzLong + deltaFzLat;
-    if (this.wheels[2].isGrounded) this.wheels[2].Fz += -deltaFzLong - deltaFzLat;
-    if (this.wheels[3].isGrounded) this.wheels[3].Fz += -deltaFzLong + deltaFzLat;
-
-    for (const w of this.wheels) w.Fz = Math.max(0, w.Fz);
-
-    // 4. Update Engine & Gearbox (including automatic Reverse gear switching)
+    // 3. Update Engine & Gearbox
     const drivenWheels = this.wheels.filter(w => w.isDriven);
     const avgRadSec = drivenWheels.reduce((sum, w) => sum + w.angularVelocity, 0) / drivenWheels.length;
 
@@ -121,7 +97,7 @@ export class Vehicle {
 
     const torquePerWheel = drivenWheels.length > 0 ? this.engine.outputTorque / drivenWheels.length : 0;
 
-    // 5. Calculate Tyre Forces per Wheel
+    // 4. Calculate Tyre Forces per Wheel
     for (let i = 0; i < this.wheels.length; i++) {
       const wheel = this.wheels[i];
       const isFront = i < 2;
@@ -129,25 +105,25 @@ export class Vehicle {
       const bumpSteer = this.suspension.getBumpSteerAngle(wheel.suspensionLength);
       const totalWheelSteer = (isFront ? this.steeringAngle : 0) + (isFront ? bumpSteer : -bumpSteer);
 
-      // Compute wheel velocity at contact point
+      // Wheel contact point velocity
       Vec3.sub(wheel.worldAttachPos, this.rigidBody.position, this.scratchTyreForceWorld);
       Vec3.cross(this.rigidBody.angularVelocity, this.scratchTyreForceWorld, wheel.wheelVelocity);
       Vec3.add(wheel.wheelVelocity, this.rigidBody.velocity, wheel.wheelVelocity);
 
-      // Compute slip ratio and slip angle
+      // Slip ratio and slip angle
       wheel.computeSlip(this.rigidBody.orientation, totalWheelSteer);
 
-      // Compute Pacejka tyre forces (Fx, Fy)
+      // Pacejka forces
       this.tyreModel.computeForces(wheel.slipRatio, wheel.slipAngle, wheel.Fz, this.scratchResult);
       wheel.Fx = this.scratchResult.Fx;
       wheel.Fy = this.scratchResult.Fy;
 
-      // Integrate wheel spin speed omega
+      // Wheel spin integration
       const wheelDriveTorque = wheel.isDriven ? torquePerWheel : 0;
       const effectiveBrakeInput = this.engine.currentGear === -1 ? 0 : inputs.brake;
       wheel.integrateWheelSpin(wheelDriveTorque, effectiveBrakeInput, dt);
 
-      // Apply Tyre forces + Suspension normal force to RigidBody
+      // Apply Tyre + Suspension forces to RigidBody
       if (wheel.isGrounded) {
         this.scratchTyreForceWorld.set(0, 0, 0);
 
@@ -159,7 +135,7 @@ export class Vehicle {
       }
     }
 
-    // 6. Integrate Chassis Rigid Body state
+    // 5. Integrate Chassis Rigid Body
     this.rigidBody.integrate(dt);
   }
 }

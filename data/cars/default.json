@@ -1,10 +1,10 @@
 {
-  "name": "GT Sport Coupe",
-  "mass": 1080,
+  "name": "GT Widebody Roadster",
+  "mass": 1050,
 
-  "centerOfMass": { "x": 0.0, "y": -0.20, "z": 0.0 },
+  "centerOfMass": { "x": 0.0, "y": -0.25, "z": 0.0 },
 
-  "inertiaDiag": [380, 1250, 1100],
+  "inertiaDiag": [360, 1100, 950],
 
   "drivetrain": "RWD",
 
@@ -28,28 +28,28 @@
   },
 
   "suspension": {
-    "restLength":     0.25,
-    "springRate":     48000,
-    "damperBump":     5500,
-    "damperRebound":  7500,
-    "bumpSteerCoeff": 0.0015
+    "restLength":     0.22,
+    "springRate":     38000,
+    "damperBump":     4200,
+    "damperRebound":  5500,
+    "bumpSteerCoeff": 0.0012
   },
 
   "tyre": {
-    "radius": 0.32,
-    "wheelInertia": 1.2,
-    "maxBrakeTorque": 3400,
+    "radius": 0.30,
+    "wheelInertia": 2.2,
+    "maxBrakeTorque": 3200,
     "pacejka": {
-      "longitudinal": { "B": 12, "C": 1.65, "E": 0.3 },
-      "lateral":      { "B": 9,  "C": 1.35, "E": -0.4 },
+      "longitudinal": { "B": 11, "C": 1.60, "E": 0.3 },
+      "lateral":      { "B": 8.5, "C": 1.30, "E": -0.4 },
       "loadSensitivity": { "a1": -0.00008, "a2": 1.45 }
     }
   },
 
   "wheelPositions": [
-    { "id": "FL", "driven": false, "x": -0.80, "y": -0.15, "z":  1.30 },
-    { "id": "FR", "driven": false, "x":  0.80, "y": -0.15, "z":  1.30 },
-    { "id": "RL", "driven": true,  "x": -0.80, "y": -0.15, "z": -1.30 },
-    { "id": "RR", "driven": true,  "x":  0.80, "y": -0.15, "z": -1.30 }
+    { "id": "FL", "driven": false, "x": -0.92, "y": -0.22, "z":  1.30 },
+    { "id": "FR", "driven": false, "x":  0.92, "y": -0.22, "z":  1.30 },
+    { "id": "RL", "driven": true,  "x": -0.92, "y": -0.22, "z": -1.30 },
+    { "id": "RR", "driven": true,  "x":  0.92, "y": -0.22, "z": -1.30 }
   ]
 }

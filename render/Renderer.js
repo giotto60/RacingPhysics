@@ -1,6 +1,6 @@
 /**
  * Renderer.js — Three.js Scene, Camera, Lighting, and Car Visual Mesh setup.
- * Cute, minimalistic GT Sport Coupe with responsive camera.
+ * Widebody Roadster stance with wheels mounted laterally outside the central body tub.
  */
 import * as THREE from 'three';
 
@@ -8,7 +8,6 @@ export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
 
-    // Renderer setup
     this.threeRenderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
@@ -20,19 +19,16 @@ export class Renderer {
     this.threeRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.threeRenderer.toneMapping = THREE.ACESFilmicToneMapping;
 
-    // Scene with bright, clean background
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x161e33);
     this.scene.fog = new THREE.FogExp2(0x161e33, 0.005);
 
-    // Camera
     this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
-    this.cameraTarget = new THREE.Vector3(0, 0.8, 0);
-    this.cameraPos = new THREE.Vector3(0, 3.2, -7.0);
+    this.cameraTarget = new THREE.Vector3(0, 0.7, 0);
+    this.cameraPos = new THREE.Vector3(0, 3.2, -6.5);
     this.camera.position.copy(this.cameraPos);
     this.camera.lookAt(this.cameraTarget);
 
-    // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
     this.scene.add(ambientLight);
 
@@ -49,13 +45,9 @@ export class Renderer {
     dirLight.shadow.camera.bottom = -40;
     this.scene.add(dirLight);
 
-    // Ground Plane with Grid
     this.createGround();
-
-    // Car Visual Mesh (Brick on Wheels)
     this.createCarMesh();
 
-    // Window resize listener
     window.addEventListener('resize', () => this.onWindowResize());
   }
 
@@ -79,53 +71,63 @@ export class Renderer {
   createCarMesh() {
     this.carGroup = new THREE.Group();
 
-    // Body (Low-slung Sports Coupe)
-    const bodyGeo = new THREE.BoxGeometry(1.6, 0.50, 3.2);
+    // Central Chassis Tub (Narrower 1.2m body so wheels sit outside)
+    const bodyGeo = new THREE.BoxGeometry(1.2, 0.42, 3.0);
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x2563eb, // Vibrant Royal Blue
+      color: 0x2563eb, // Electric Royal Blue
       roughness: 0.2,
       metalness: 0.5
     });
     this.bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-    this.bodyMesh.position.y = 0.35;
+    this.bodyMesh.position.y = 0.28;
     this.bodyMesh.castShadow = true;
     this.bodyMesh.receiveShadow = true;
     this.carGroup.add(this.bodyMesh);
 
-    // Aerodynamic Canopy Roof
-    const roofGeo = new THREE.BoxGeometry(1.3, 0.40, 1.6);
+    // Aerodynamic Low Canopy Roof
+    const roofGeo = new THREE.BoxGeometry(0.95, 0.35, 1.4);
     const roofMat = new THREE.MeshStandardMaterial({
       color: 0x0f172a,
       roughness: 0.1,
       metalness: 0.9
     });
     const roofMesh = new THREE.Mesh(roofGeo, roofMat);
-    roofMesh.position.set(0, 0.75, -0.1);
+    roofMesh.position.set(0, 0.62, -0.1);
     roofMesh.castShadow = true;
     this.carGroup.add(roofMesh);
 
+    // Front/Rear Axle Suspension Wishbone Brackets (Visual connection to outer wheels)
+    const axleGeo = new THREE.BoxGeometry(1.84, 0.08, 0.15);
+    const axleMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8 });
+    const frontAxle = new THREE.Mesh(axleGeo, axleMat);
+    frontAxle.position.set(0, 0.12, 1.30);
+    const rearAxle = new THREE.Mesh(axleGeo, axleMat);
+    rearAxle.position.set(0, 0.12, -1.30);
+    this.carGroup.add(frontAxle);
+    this.carGroup.add(rearAxle);
+
     // Headlights
-    const lightGeo = new THREE.BoxGeometry(0.35, 0.12, 0.1);
+    const lightGeo = new THREE.BoxGeometry(0.28, 0.10, 0.1);
     const hlMat = new THREE.MeshBasicMaterial({ color: 0x93c5fd });
     const hlLeft = new THREE.Mesh(lightGeo, hlMat);
-    hlLeft.position.set(-0.55, 0.35, 1.58);
+    hlLeft.position.set(-0.42, 0.28, 1.51);
     const hlRight = new THREE.Mesh(lightGeo, hlMat);
-    hlRight.position.set(0.55, 0.35, 1.58);
+    hlRight.position.set(0.42, 0.28, 1.51);
     this.carGroup.add(hlLeft);
     this.carGroup.add(hlRight);
 
     // Taillights
     const tlMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
     const tlLeft = new THREE.Mesh(lightGeo, tlMat);
-    tlLeft.position.set(-0.55, 0.35, -1.58);
+    tlLeft.position.set(-0.42, 0.28, -1.51);
     const tlRight = new THREE.Mesh(lightGeo, tlMat);
-    tlRight.position.set(0.55, 0.35, -1.58);
+    tlRight.position.set(0.42, 0.28, -1.51);
     this.carGroup.add(tlLeft);
     this.carGroup.add(tlRight);
 
-    // Wheels (4 cylinders)
+    // Wheels (4 cylinders mounted outside the central tub)
     this.wheelMeshes = [];
-    const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.25, 24);
+    const wheelGeo = new THREE.CylinderGeometry(0.30, 0.30, 0.24, 24);
     wheelGeo.rotateZ(Math.PI / 2);
 
     const tireMat = new THREE.MeshStandardMaterial({
@@ -133,7 +135,7 @@ export class Renderer {
       roughness: 0.6
     });
 
-    const rimGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.26, 12);
+    const rimGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.25, 12);
     rimGeo.rotateZ(Math.PI / 2);
     const rimMat = new THREE.MeshStandardMaterial({
       color: 0xf1f5f9,
@@ -188,11 +190,11 @@ export class Renderer {
     }
 
     // Smooth Chase Camera
-    const idealOffset = new THREE.Vector3(0, 3.0, -6.5);
+    const idealOffset = new THREE.Vector3(0, 2.8, -6.0);
     idealOffset.applyQuaternion(this.carGroup.quaternion);
     idealOffset.add(this.carGroup.position);
 
-    const idealLookAt = new THREE.Vector3(0, 0.8, 2.5);
+    const idealLookAt = new THREE.Vector3(0, 0.7, 2.5);
     idealLookAt.applyQuaternion(this.carGroup.quaternion);
     idealLookAt.add(this.carGroup.position);
 
