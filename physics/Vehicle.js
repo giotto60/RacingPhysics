@@ -32,22 +32,18 @@ export class Vehicle {
     this.maxSteerAngle = 0.52; // ~30 degrees max steer angle
 
     // Vehicle dimensions for weight transfer
-    this.wheelbase = Math.abs(carConfig.wheelPositions[0].z - carConfig.wheelPositions[2].z); // L
-    this.trackWidth = Math.abs(carConfig.wheelPositions[0].x - carConfig.wheelPositions[1].x); // W
-    this.cgHeight   = 0.45; // Height of center of mass above ground
+    this.wheelbase = Math.abs(carConfig.wheelPositions[0].z - carConfig.wheelPositions[2].z);
+    this.trackWidth = Math.abs(carConfig.wheelPositions[0].x - carConfig.wheelPositions[1].x);
+    this.cgHeight   = 0.25; // Lower Center of Gravity for sports car stability
 
-    // Pre-allocated scratch vectors
     this.scratchTyreForceWorld = new Vec3();
     this.scratchTyreForceLocal = new Vec3();
     this.scratchResult = { Fx: 0, Fy: 0 };
 
-    this.reset(0, 0.72, 0);
+    this.reset(0, 0.60, 0);
   }
 
-  /**
-   * Reset vehicle to initial position on ground.
-   */
-  reset(posX = 0, posY = 0.72, posZ = 0) {
+  reset(posX = 0, posY = 0.60, posZ = 0) {
     this.rigidBody.position.set(posX, posY, posZ);
     this.rigidBody.velocity.set(0, 0, 0);
     this.rigidBody.acceleration.set(0, 0, 0);
@@ -74,6 +70,15 @@ export class Vehicle {
   step(dt, inputs) {
     this.rigidBody.saveSnapshot();
     this.rigidBody.clearAccumulators();
+
+    const currentSpeedMs = this.rigidBody.velocity.length();
+    const currentSpeedKmH = currentSpeedMs * 3.6;
+
+    // Static Holding Brake: if stopped & holding brake without throttle, damp remaining velocity to zero
+    if (inputs.brake > 0.1 && inputs.throttle < 0.1 && currentSpeedKmH < 1.5 && this.engine.currentGear > 0) {
+      Vec3.scale(this.rigidBody.velocity, 0.8, this.rigidBody.velocity);
+      Vec3.scale(this.rigidBody.angularVelocity, 0.8, this.rigidBody.angularVelocity);
+    }
 
     // 1. Steering input smoothing
     const targetSteer = inputs.steer * this.maxSteerAngle;
@@ -108,11 +113,11 @@ export class Vehicle {
 
     for (const w of this.wheels) w.Fz = Math.max(0, w.Fz);
 
-    // 4. Update Engine & Gearbox
+    // 4. Update Engine & Gearbox (including automatic Reverse gear switching)
     const drivenWheels = this.wheels.filter(w => w.isDriven);
     const avgRadSec = drivenWheels.reduce((sum, w) => sum + w.angularVelocity, 0) / drivenWheels.length;
 
-    this.engine.update(inputs.throttle, inputs.brake, avgRadSec, dt);
+    this.engine.update(inputs.throttle, inputs.brake, currentSpeedKmH, avgRadSec, dt);
 
     const torquePerWheel = drivenWheels.length > 0 ? this.engine.outputTorque / drivenWheels.length : 0;
 
@@ -139,7 +144,8 @@ export class Vehicle {
 
       // Integrate wheel spin speed omega
       const wheelDriveTorque = wheel.isDriven ? torquePerWheel : 0;
-      wheel.integrateWheelSpin(wheelDriveTorque, inputs.brake, dt);
+      const effectiveBrakeInput = this.engine.currentGear === -1 ? 0 : inputs.brake;
+      wheel.integrateWheelSpin(wheelDriveTorque, effectiveBrakeInput, dt);
 
       // Apply Tyre forces + Suspension normal force to RigidBody
       if (wheel.isGrounded) {

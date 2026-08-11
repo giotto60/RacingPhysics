@@ -1,6 +1,6 @@
 /**
  * Renderer.js — Three.js Scene, Camera, Lighting, and Car Visual Mesh setup.
- * Cute, minimalistic aesthetic with bright lighting, grid plane, and smooth chase camera.
+ * Cute, minimalistic GT Sport Coupe with responsive camera.
  */
 import * as THREE from 'three';
 
@@ -22,18 +22,18 @@ export class Renderer {
 
     // Scene with bright, clean background
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x182035);
-    this.scene.fog = new THREE.FogExp2(0x182035, 0.005);
+    this.scene.background = new THREE.Color(0x161e33);
+    this.scene.fog = new THREE.FogExp2(0x161e33, 0.005);
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
-    this.cameraTarget = new THREE.Vector3(0, 1, 0);
-    this.cameraPos = new THREE.Vector3(0, 4, -8);
+    this.cameraTarget = new THREE.Vector3(0, 0.8, 0);
+    this.cameraPos = new THREE.Vector3(0, 3.2, -7.0);
     this.camera.position.copy(this.cameraPos);
     this.camera.lookAt(this.cameraTarget);
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
     this.scene.add(ambientLight);
 
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -60,10 +60,9 @@ export class Renderer {
   }
 
   createGround() {
-    // Ground plane mesh
     const planeGeo = new THREE.PlaneGeometry(600, 600);
     const planeMat = new THREE.MeshStandardMaterial({
-      color: 0x222a3e,
+      color: 0x1f273d,
       roughness: 0.7,
       metalness: 0.1
     });
@@ -72,7 +71,6 @@ export class Renderer {
     ground.receiveShadow = true;
     this.scene.add(ground);
 
-    // Vibrant Grid helper
     const grid = new THREE.GridHelper(600, 300, 0x60a5fa, 0x334155);
     grid.position.y = 0.01;
     this.scene.add(grid);
@@ -81,47 +79,47 @@ export class Renderer {
   createCarMesh() {
     this.carGroup = new THREE.Group();
 
-    // Body (Cute Toy Sports Coupe)
-    const bodyGeo = new THREE.BoxGeometry(1.5, 0.65, 3.1);
+    // Body (Low-slung Sports Coupe)
+    const bodyGeo = new THREE.BoxGeometry(1.6, 0.50, 3.2);
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x3b82f6, // Electric Blue
+      color: 0x2563eb, // Vibrant Royal Blue
       roughness: 0.2,
-      metalness: 0.4
+      metalness: 0.5
     });
     this.bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-    this.bodyMesh.position.y = 0.45;
+    this.bodyMesh.position.y = 0.35;
     this.bodyMesh.castShadow = true;
     this.bodyMesh.receiveShadow = true;
     this.carGroup.add(this.bodyMesh);
 
-    // Roof / Windshield
-    const roofGeo = new THREE.BoxGeometry(1.25, 0.45, 1.5);
+    // Aerodynamic Canopy Roof
+    const roofGeo = new THREE.BoxGeometry(1.3, 0.40, 1.6);
     const roofMat = new THREE.MeshStandardMaterial({
       color: 0x0f172a,
       roughness: 0.1,
       metalness: 0.9
     });
     const roofMesh = new THREE.Mesh(roofGeo, roofMat);
-    roofMesh.position.set(0, 0.90, -0.1);
+    roofMesh.position.set(0, 0.75, -0.1);
     roofMesh.castShadow = true;
     this.carGroup.add(roofMesh);
 
     // Headlights
-    const lightGeo = new THREE.BoxGeometry(0.35, 0.15, 0.1);
+    const lightGeo = new THREE.BoxGeometry(0.35, 0.12, 0.1);
     const hlMat = new THREE.MeshBasicMaterial({ color: 0x93c5fd });
     const hlLeft = new THREE.Mesh(lightGeo, hlMat);
-    hlLeft.position.set(-0.5, 0.45, 1.52);
+    hlLeft.position.set(-0.55, 0.35, 1.58);
     const hlRight = new THREE.Mesh(lightGeo, hlMat);
-    hlRight.position.set(0.5, 0.45, 1.52);
+    hlRight.position.set(0.55, 0.35, 1.58);
     this.carGroup.add(hlLeft);
     this.carGroup.add(hlRight);
 
     // Taillights
     const tlMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
     const tlLeft = new THREE.Mesh(lightGeo, tlMat);
-    tlLeft.position.set(-0.5, 0.45, -1.52);
+    tlLeft.position.set(-0.55, 0.35, -1.58);
     const tlRight = new THREE.Mesh(lightGeo, tlMat);
-    tlRight.position.set(0.5, 0.45, -1.52);
+    tlRight.position.set(0.55, 0.35, -1.58);
     this.carGroup.add(tlLeft);
     this.carGroup.add(tlRight);
 
@@ -159,17 +157,12 @@ export class Renderer {
     this.scene.add(this.carGroup);
   }
 
-  /**
-   * Update visual mesh positions from interpolated physics state.
-   */
   update(vehicleState) {
     const { position, orientation, wheels } = vehicleState;
 
-    // Chassis transform
     this.carGroup.position.set(position.x, position.y, position.z);
     this.carGroup.quaternion.set(orientation.x, orientation.y, orientation.z, orientation.w);
 
-    // Wheels transforms
     for (let i = 0; i < wheels.length; i++) {
       const w = wheels[i];
       const mesh = this.wheelMeshes[i];
@@ -195,21 +188,20 @@ export class Renderer {
     }
 
     // Smooth Chase Camera
-    const idealOffset = new THREE.Vector3(0, 3.5, -7.5);
+    const idealOffset = new THREE.Vector3(0, 3.0, -6.5);
     idealOffset.applyQuaternion(this.carGroup.quaternion);
     idealOffset.add(this.carGroup.position);
 
-    const idealLookAt = new THREE.Vector3(0, 1.0, 3.0);
+    const idealLookAt = new THREE.Vector3(0, 0.8, 2.5);
     idealLookAt.applyQuaternion(this.carGroup.quaternion);
     idealLookAt.add(this.carGroup.position);
 
-    this.cameraPos.lerp(idealOffset, 0.1);
-    this.cameraTarget.lerp(idealLookAt, 0.15);
+    this.cameraPos.lerp(idealOffset, 0.12);
+    this.cameraTarget.lerp(idealLookAt, 0.18);
 
     this.camera.position.copy(this.cameraPos);
     this.camera.lookAt(this.cameraTarget);
 
-    // Render scene
     this.threeRenderer.render(this.scene, this.camera);
   }
 
