@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RacingPhysics — Test Environment</title>
 
-  <!-- Three.js via importmap (no build step needed) -->
+  <!-- Three.js via importmap -->
   <script type="importmap">
   {
     "imports": {
@@ -20,7 +20,7 @@
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      background: #080810;
+      background: #101424;
       overflow: hidden;
       font-family: 'Share Tech Mono', monospace;
       color: #e0e0f0;
@@ -30,6 +30,23 @@
       display: block;
       width: 100vw;
       height: 100vh;
+    }
+
+    /* Error Overlay */
+    #error-overlay {
+      display: none;
+      position: fixed;
+      inset: 20px;
+      z-index: 9999;
+      background: rgba(40, 10, 15, 0.95);
+      border: 2px solid #ff4444;
+      border-radius: 12px;
+      padding: 24px;
+      color: #ff8888;
+      font-family: monospace;
+      font-size: 14px;
+      white-space: pre-wrap;
+      overflow: auto;
     }
 
     /* ── HUD ─────────────────────────────────────────── */
@@ -47,8 +64,8 @@
       left: 50%;
       transform: translateX(-50%);
       text-align: center;
-      background: rgba(10,10,20,0.65);
-      border: 1px solid rgba(120,160,255,0.2);
+      background: rgba(15,20,35,0.75);
+      border: 1px solid rgba(120,160,255,0.3);
       border-radius: 12px;
       padding: 10px 28px 8px;
       backdrop-filter: blur(8px);
@@ -64,7 +81,7 @@
     #speed-unit {
       font-size: 11px;
       letter-spacing: 3px;
-      color: rgba(160,207,255,0.5);
+      color: rgba(160,207,255,0.6);
       margin-top: 2px;
     }
 
@@ -73,14 +90,14 @@
       position: absolute;
       top: 24px;
       right: 28px;
-      background: rgba(10,10,20,0.65);
-      border: 1px solid rgba(120,160,255,0.2);
+      background: rgba(15,20,35,0.75);
+      border: 1px solid rgba(120,160,255,0.3);
       border-radius: 12px;
       padding: 8px 20px;
       backdrop-filter: blur(8px);
       text-align: center;
     }
-    #gear-label { font-size: 10px; letter-spacing: 2px; color: rgba(200,200,255,0.4); }
+    #gear-label { font-size: 10px; letter-spacing: 2px; color: rgba(200,200,255,0.5); }
     #gear-value {
       font-family: 'Outfit', sans-serif;
       font-weight: 800;
@@ -97,17 +114,17 @@
       left: 50%;
       transform: translateX(-50%);
       width: 360px;
-      background: rgba(10,10,20,0.65);
-      border: 1px solid rgba(120,160,255,0.15);
+      background: rgba(15,20,35,0.75);
+      border: 1px solid rgba(120,160,255,0.2);
       border-radius: 10px;
       padding: 10px 16px;
       backdrop-filter: blur(8px);
     }
-    #rpm-label { font-size: 9px; letter-spacing: 2px; color: rgba(200,200,255,0.4); margin-bottom: 5px; }
+    #rpm-label { font-size: 9px; letter-spacing: 2px; color: rgba(200,200,255,0.5); margin-bottom: 5px; }
     #rpm-bar-bg {
       width: 100%;
       height: 8px;
-      background: rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.1);
       border-radius: 4px;
       overflow: hidden;
     }
@@ -116,9 +133,9 @@
       width: 0%;
       border-radius: 4px;
       background: linear-gradient(90deg, #4080ff, #80c0ff, #ff6060);
-      transition: background 0.1s;
+      transition: width 0.05s;
     }
-    #rpm-value { font-size: 11px; color: rgba(180,200,255,0.6); margin-top: 4px; text-align: right; }
+    #rpm-value { font-size: 11px; color: rgba(180,200,255,0.7); margin-top: 4px; text-align: right; }
 
     /* Input bars — bottom left */
     #inputs-panel {
@@ -126,25 +143,25 @@
       bottom: 32px;
       left: 28px;
       width: 140px;
-      background: rgba(10,10,20,0.65);
-      border: 1px solid rgba(120,160,255,0.15);
+      background: rgba(15,20,35,0.75);
+      border: 1px solid rgba(120,160,255,0.2);
       border-radius: 10px;
       padding: 10px 14px;
       backdrop-filter: blur(8px);
     }
     .input-row { margin-bottom: 8px; }
     .input-row:last-child { margin-bottom: 0; }
-    .input-label { font-size: 9px; letter-spacing: 2px; color: rgba(200,200,255,0.4); margin-bottom: 3px; }
+    .input-label { font-size: 9px; letter-spacing: 2px; color: rgba(200,200,255,0.5); margin-bottom: 3px; }
     .input-bar-bg {
       width: 100%;
-      height: 5px;
-      background: rgba(255,255,255,0.07);
+      height: 6px;
+      background: rgba(255,255,255,0.1);
       border-radius: 3px;
       overflow: hidden;
     }
     #throttle-fill { height:100%; width:0%; border-radius:3px; background:#40c060; }
     #brake-fill    { height:100%; width:0%; border-radius:3px; background:#e05050; }
-    #steer-wrap { position:relative; height:5px; background:rgba(255,255,255,0.07); border-radius:3px; overflow:hidden; }
+    #steer-wrap { position:relative; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden; }
     #steer-fill { position:absolute; top:0; height:100%; background:#a080ff; border-radius:3px; }
 
     /* Telemetry — bottom right */
@@ -152,9 +169,9 @@
       position: absolute;
       bottom: 32px;
       right: 28px;
-      width: 200px;
-      background: rgba(10,10,20,0.65);
-      border: 1px solid rgba(120,160,255,0.15);
+      width: 210px;
+      background: rgba(15,20,35,0.75);
+      border: 1px solid rgba(120,160,255,0.2);
       border-radius: 10px;
       padding: 10px 14px;
       backdrop-filter: blur(8px);
@@ -163,7 +180,7 @@
     #tele-panel .tele-header {
       font-size: 9px;
       letter-spacing: 2px;
-      color: rgba(200,200,255,0.4);
+      color: rgba(200,200,255,0.5);
       margin-bottom: 7px;
     }
     .tele-wheel {
@@ -171,9 +188,9 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 4px;
-      color: rgba(200,220,255,0.7);
+      color: rgba(200,220,255,0.8);
     }
-    .tele-wheel span:first-child { color: rgba(200,200,255,0.4); }
+    .tele-wheel span:first-child { color: rgba(200,200,255,0.5); }
     .tele-slip { color: #80e0ff; }
     .tele-load { color: #ffe080; }
 
@@ -182,30 +199,30 @@
       position: absolute;
       top: 24px;
       left: 28px;
-      background: rgba(10,10,20,0.55);
-      border: 1px solid rgba(120,160,255,0.12);
+      background: rgba(15,20,35,0.75);
+      border: 1px solid rgba(120,160,255,0.2);
       border-radius: 10px;
       padding: 10px 14px;
       font-size: 10px;
       line-height: 1.8;
-      color: rgba(180,200,255,0.5);
+      color: rgba(180,200,255,0.7);
       backdrop-filter: blur(8px);
     }
     #controls-hint kbd {
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
       border-radius: 3px;
       padding: 1px 5px;
       font-size: 9px;
-      color: rgba(220,230,255,0.7);
+      color: #fff;
     }
   </style>
 </head>
 <body>
+  <div id="error-overlay"></div>
   <canvas id="canvas"></canvas>
 
   <div id="hud">
-
     <!-- Speed -->
     <div id="speed-panel">
       <div id="speed-value">0</div>
@@ -222,7 +239,7 @@
     <div id="rpm-panel">
       <div id="rpm-label">RPM</div>
       <div id="rpm-bar-bg"><div id="rpm-bar-fill"></div></div>
-      <div id="rpm-value">0</div>
+      <div id="rpm-value">0 RPM</div>
     </div>
 
     <!-- Inputs -->
@@ -244,10 +261,10 @@
     <!-- Tyre telemetry -->
     <div id="tele-panel">
       <div class="tele-header">TYRE LOADS &amp; SLIP</div>
-      <div class="tele-wheel" id="tw-fl"><span>FL</span> <span class="tele-load" id="tl-fl">0 N</span> <span class="tele-slip" id="ts-fl">0°</span></div>
-      <div class="tele-wheel" id="tw-fr"><span>FR</span> <span class="tele-load" id="tl-fr">0 N</span> <span class="tele-slip" id="ts-fr">0°</span></div>
-      <div class="tele-wheel" id="tw-rl"><span>RL</span> <span class="tele-load" id="tl-rl">0 N</span> <span class="tele-slip" id="ts-rl">0°</span></div>
-      <div class="tele-wheel" id="tw-rr"><span>RR</span> <span class="tele-load" id="tl-rr">0 N</span> <span class="tele-slip" id="ts-rr">0°</span></div>
+      <div class="tele-wheel" id="tw-fl"><span>FL</span> <span class="tele-load" id="tl-fl">0 N</span> <span class="tele-slip" id="ts-fl">0.0°</span></div>
+      <div class="tele-wheel" id="tw-fr"><span>FR</span> <span class="tele-load" id="tl-fr">0 N</span> <span class="tele-slip" id="ts-fr">0.0°</span></div>
+      <div class="tele-wheel" id="tw-rl"><span>RL</span> <span class="tele-load" id="tl-rl">0 N</span> <span class="tele-slip" id="ts-rl">0.0°</span></div>
+      <div class="tele-wheel" id="tw-rr"><span>RR</span> <span class="tele-load" id="tl-rr">0 N</span> <span class="tele-slip" id="ts-rr">0.0°</span></div>
     </div>
 
     <!-- Controls hint -->
@@ -255,8 +272,23 @@
       <kbd>W</kbd> Throttle &nbsp; <kbd>S</kbd> Brake<br>
       <kbd>A</kbd><kbd>D</kbd> Steer &nbsp; <kbd>R</kbd> Reset
     </div>
-
   </div>
+
+  <script>
+    function showError(msg) {
+      const el = document.getElementById('error-overlay');
+      if (el) {
+        el.style.display = 'block';
+        el.textContent += msg + '\n\n';
+      }
+    }
+    window.onerror = function(message, source, lineno, colno, error) {
+      showError(`[JS Error] ${message}\nAt ${source}:${lineno}:${colno}`);
+    };
+    window.onunhandledrejection = function(event) {
+      showError(`[Promise Rejection] ${event.reason?.stack || event.reason}`);
+    };
+  </script>
 
   <script type="module" src="./main.js"></script>
 </body>

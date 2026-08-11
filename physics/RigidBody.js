@@ -20,10 +20,10 @@ export class RigidBody {
     );
 
     // Dynamic state
-    this.position        = new Vec3(0, 1.0, 0);
+    this.position        = new Vec3(0, 0.72, 0);
     this.velocity        = new Vec3();
     this.acceleration    = new Vec3();
-    this.orientation     = new Quat(); // Identity
+    this.orientation     = new Quat(); // Identity (0,0,0,1)
     this.angularVelocity = new Vec3();
 
     // Accumulators
@@ -35,8 +35,8 @@ export class RigidBody {
     this.rotationMatrix  = new Mat3();
 
     // Previous state snapshot for render interpolation
-    this.prevPosition    = new Vec3();
-    this.prevOrientation = new Quat();
+    this.prevPosition    = new Vec3(0, 0.72, 0);
+    this.prevOrientation = new Quat(); // Identity (0,0,0,1)
 
     // Temp scratch vectors
     this.scratchR     = new Vec3();
@@ -97,7 +97,7 @@ export class RigidBody {
     Vec3.addScaled(this.velocity, this.acceleration, dt, this.velocity);
     Vec3.addScaled(this.position, this.velocity, dt, this.position);
 
-    // Ground plane collision floor (simple prevention of clipping under y=0)
+    // Ground plane collision floor (prevents clipping below y=0.15)
     if (this.position.y < 0.15) {
       this.position.y = 0.15;
       if (this.velocity.y < 0) this.velocity.y = 0;

@@ -36,61 +36,73 @@ const teleSlips = [
 ];
 
 async function init() {
-  const canvas = document.getElementById('canvas');
+  try {
+    const canvas = document.getElementById('canvas');
 
-  // Load car spec
-  const res = await fetch('./data/cars/default.json');
-  carSpec = await res.json();
+    // Load car spec
+    const res = await fetch('./data/cars/default.json');
+    if (!res.ok) {
+      throw new Error(`Failed to load car spec JSON: HTTP ${res.status}`);
+    }
+    carSpec = await res.json();
 
-  // Instantiate sub-systems
-  physicsWorld = new PhysicsWorld(carSpec);
-  inputManager = new InputManager();
-  renderer = new Renderer(canvas);
+    // Instantiate sub-systems
+    physicsWorld = new PhysicsWorld(carSpec);
+    inputManager = new InputManager();
+    renderer = new Renderer(canvas);
 
-  // Start game loop
-  requestAnimationFrame(gameLoop);
+    // Start game loop
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
+  } catch (err) {
+    if (window.showError) window.showError(`[Init Failed] ${err.stack || err.message}`);
+    console.error(err);
+  }
 }
 
 function gameLoop(now) {
-  const dt = (now - lastTime) / 1000;
-  lastTime = now;
+  try {
+    const dt = Math.min(0.1, (now - lastTime) / 1000);
+    lastTime = now;
 
-  // 1. Process user controls
-  inputManager.update();
-  const inputs = inputManager.inputs;
+    // 1. Process user controls
+    inputManager.update();
+    const inputs = inputManager.inputs;
 
-  if (inputs.reset) {
-    physicsWorld.vehicle.reset(0, 0.4, 0);
+    if (inputs.reset) {
+      physicsWorld.vehicle.reset(0, 0.72, 0);
+    }
+
+    // 2. Step physics engine (120Hz fixed step accumulator)
+    physicsWorld.update(dt, inputs);
+
+    // 3. Get interpolated state for smooth render frame
+    const state = physicsWorld.getInterpolatedVehicleState();
+
+    // 4. Update Three.js scene & render
+    renderer.update(state);
+
+    // 5. Update HUD Telemetry
+    updateHUD(state, inputs);
+  } catch (err) {
+    if (window.showError) window.showError(`[Frame Error] ${err.stack || err.message}`);
+    console.error(err);
+    return; // stop loop on error to avoid spamming
   }
-
-  // 2. Step physics engine (120Hz fixed step accumulator)
-  physicsWorld.update(dt, inputs);
-
-  // 3. Get interpolated state for smooth render frame
-  const state = physicsWorld.getInterpolatedVehicleState();
-
-  // 4. Update Three.js scene & render
-  renderer.update(state);
-
-  // 5. Update HUD Telemetry
-  updateHUD(state, inputs);
 
   requestAnimationFrame(gameLoop);
 }
 
 function updateHUD(state, inputs) {
-  // Speed & Gear
   speedValueEl.textContent = Math.round(state.speedKmH);
   gearValueEl.textContent = state.gear > 0 ? state.gear : (state.gear === 0 ? 'N' : 'R');
 
-  // RPM
   const rpm = Math.round(state.rpm);
   const maxRPM = carSpec.engine.maxRPM;
   const rpmPct = Math.min(100, Math.max(0, (rpm / maxRPM) * 100));
   rpmBarFillEl.style.width = `${rpmPct}%`;
   rpmValueEl.textContent = `${rpm} RPM`;
 
-  // Input bars
   throttleFill.style.width = `${inputs.throttle * 100}%`;
   brakeFill.style.width    = `${inputs.brake * 100}%`;
 
@@ -103,7 +115,6 @@ function updateHUD(state, inputs) {
     steerFill.style.width = `${steerPct}%`;
   }
 
-  // Tyre telemetry (Loads & Slips)
   const wheels = state.wheels;
   for (let i = 0; i < 4; i++) {
     if (wheels[i]) {

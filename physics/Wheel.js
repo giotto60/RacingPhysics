@@ -15,10 +15,11 @@ export class Wheel {
     // Body-space attachment position
     this.localAttachPos = new Vec3(config.x, config.y, config.z);
 
-    // State
+    // State (Initialize suspension length to rest length to avoid frame-1 damper velocity spikes)
     this.steerAngle = 0;       // User steering + bump steer (rad)
-    this.suspensionLength = 0; // Current compressed length (m)
-    this.prevSuspensionLength = 0;
+    this.suspensionRestLength = config.restLength || 0.30;
+    this.suspensionLength = this.suspensionRestLength;
+    this.prevSuspensionLength = this.suspensionRestLength;
     this.angularVelocity = 0;  // Wheel rotational speed (rad/s)
     this.rotationAngle = 0;    // Visual wheel spin angle (rad)
     this.isGrounded = false;
@@ -46,10 +47,27 @@ export class Wheel {
   }
 
   /**
-   * Perform ground raycast for wheel.
-   * For the simple testing environment, ground plane is at y = 0.
+   * Reset wheel state to resting defaults.
    */
-  updateGroundContact(chassisPos, chassisQuat, suspensionRestLength) {
+  reset() {
+    this.steerAngle = 0;
+    this.suspensionLength = this.suspensionRestLength;
+    this.prevSuspensionLength = this.suspensionRestLength;
+    this.angularVelocity = 0;
+    this.rotationAngle = 0;
+    this.isGrounded = false;
+    this.slipRatio = 0;
+    this.slipAngle = 0;
+    this.Fx = 0;
+    this.Fy = 0;
+    this.Fz = 0;
+  }
+
+  /**
+   * Perform ground raycast for wheel.
+   * Ground plane is at y = 0.
+   */
+  updateGroundContact(chassisPos, chassisQuat) {
     // Compute world attachment position
     chassisQuat.rotateVec3(this.localAttachPos, this.worldAttachPos);
     Vec3.add(this.worldAttachPos, chassisPos, this.worldAttachPos);
@@ -59,8 +77,7 @@ export class Wheel {
     chassisQuat.rotateVec3(downLocal, this.worldRayDir);
 
     // Flat ground collision check (y = 0 plane)
-    // Ray: origin = worldAttachPos, dir = worldRayDir
-    const maxDistance = suspensionRestLength + this.radius;
+    const maxDistance = this.suspensionRestLength + this.radius;
 
     if (this.worldRayDir.y < -1e-5) {
       // Intersection with y = 0
@@ -81,7 +98,7 @@ export class Wheel {
     // Wheel in air
     this.isGrounded = false;
     this.prevSuspensionLength = this.suspensionLength;
-    this.suspensionLength = suspensionRestLength;
+    this.suspensionLength = this.suspensionRestLength;
     this.Fz = 0;
     this.Fx = 0;
     this.Fy = 0;
@@ -91,6 +108,8 @@ export class Wheel {
    * Calculate slip ratio and slip angle given wheel velocity at contact point.
    */
   computeSlip(chassisQuat, totalSteerAngle) {
+    this.steerAngle = totalSteerAngle;
+
     if (!this.isGrounded) {
       this.slipRatio = 0;
       this.slipAngle = 0;
@@ -99,7 +118,6 @@ export class Wheel {
 
     // Combine chassis orientation with steering angle
     const steerQuat = new Quat().setFromAxisAngle(0, 1, 0, totalSteerAngle);
-    // Local forward (0,0,1) and right (1,0,0) rotated by chassis then steer angle
     const localFwd = new Vec3(0, 0, 1);
     const localRight = new Vec3(1, 0, 0);
 
@@ -116,11 +134,11 @@ export class Wheel {
     // Linear speed equivalent of wheel rotational speed
     const vWheel = this.angularVelocity * this.radius;
 
-    // Longitudinal slip ratio kappa = (vWheel - vLong) / max(|vLong|, |vWheel|, epsilon)
+    // Longitudinal slip ratio
     const denomRatio = Math.max(Math.abs(vLong), Math.abs(vWheel), 1.0);
     this.slipRatio = (vWheel - vLong) / denomRatio;
 
-    // Lateral slip angle alpha = atan2(vLat, |vLong|)
+    // Lateral slip angle
     this.slipAngle = Math.atan2(vLat, Math.max(0.5, Math.abs(vLong)));
   }
 
@@ -130,26 +148,21 @@ export class Wheel {
   integrateWheelSpin(driveTorque, brakeInput, dt) {
     const brakeTorque = brakeInput * this.maxBrakeTorque;
 
-    // Net torque on wheel: DriveTorque - BrakeTorque - (Fx * radius)
     let netTorque = driveTorque;
 
-    // Tyre reaction torque resisting spin
     if (this.isGrounded) {
       netTorque -= this.Fx * this.radius;
     }
 
-    // Apply brake torque opposing spin
     if (brakeTorque > 0) {
-      const brakeDir = Math.sign(this.angularVelocity);
+      const brakeDir = Math.sign(this.angularVelocity) || 1;
       const mag = Math.min(Math.abs(this.angularVelocity / dt) * this.inertia, brakeTorque);
       netTorque -= brakeDir * mag;
     }
 
-    // Angular acceleration alpha = Torque / Inertia
     const alpha = netTorque / this.inertia;
     this.angularVelocity += alpha * dt;
 
-    // Spin angle for visual rendering
     this.rotationAngle += this.angularVelocity * dt;
   }
 }

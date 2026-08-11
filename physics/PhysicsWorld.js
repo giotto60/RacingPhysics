@@ -11,10 +11,10 @@ export class PhysicsWorld {
     this.accumulator = 0;
 
     this.vehicle = new Vehicle(carConfig);
-    this.vehicle.reset(0, 0.4, 0);
+    this.vehicle.reset(0, 0.72, 0);
 
     // Render interpolation objects
-    this.interpPosition = new Vec3();
+    this.interpPosition = new Vec3(0, 0.72, 0);
     this.interpOrientation = new Quat();
   }
 

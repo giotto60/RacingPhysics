@@ -24,7 +24,8 @@ export class Vehicle {
       ...pos,
       radius: carConfig.tyre.radius,
       wheelInertia: carConfig.tyre.wheelInertia,
-      maxBrakeTorque: carConfig.tyre.maxBrakeTorque
+      maxBrakeTorque: carConfig.tyre.maxBrakeTorque,
+      restLength: carConfig.suspension.restLength
     }));
 
     this.steeringAngle = 0;
@@ -39,23 +40,29 @@ export class Vehicle {
     this.scratchTyreForceWorld = new Vec3();
     this.scratchTyreForceLocal = new Vec3();
     this.scratchResult = { Fx: 0, Fy: 0 };
+
+    this.reset(0, 0.72, 0);
   }
 
   /**
    * Reset vehicle to initial position on ground.
    */
-  reset(posX = 0, posY = 0.5, posZ = 0) {
+  reset(posX = 0, posY = 0.72, posZ = 0) {
     this.rigidBody.position.set(posX, posY, posZ);
     this.rigidBody.velocity.set(0, 0, 0);
     this.rigidBody.acceleration.set(0, 0, 0);
     this.rigidBody.orientation.identity();
     this.rigidBody.angularVelocity.set(0, 0, 0);
+
+    this.rigidBody.prevPosition.copy(this.rigidBody.position);
+    this.rigidBody.prevOrientation.copy(this.rigidBody.orientation);
+
     this.engine.currentGear = 1;
     this.engine.currentRPM = this.engine.idleRPM;
+    this.steeringAngle = 0;
 
     for (const w of this.wheels) {
-      w.angularVelocity = 0;
-      w.rotationAngle = 0;
+      w.reset();
     }
   }
 
@@ -73,13 +80,10 @@ export class Vehicle {
     this.steeringAngle += (targetSteer - this.steeringAngle) * Math.min(1.0, dt * 10);
 
     // 2. Raycast ground contacts for all wheels & calculate suspension forces
-    let totalStaticFz = this.rigidBody.mass * 9.81 / 4;
-
     for (const wheel of this.wheels) {
       wheel.updateGroundContact(
         this.rigidBody.position,
-        this.rigidBody.orientation,
-        this.suspension.restLength
+        this.rigidBody.orientation
       );
 
       if (wheel.isGrounded) {
@@ -91,26 +95,17 @@ export class Vehicle {
     }
 
     // 3. Dynamic Weight Transfer (Longitudinal + Lateral)
-    // Convert world accelerations to local car body space
     const localAcc = new Vec3();
     this.rigidBody.orientation.inverseRotateVec3(this.rigidBody.acceleration, localAcc);
 
-    // deltaFz_long = (m * accX * CoM_height) / Wheelbase
-    // deltaFz_lat  = (m * accZ * CoM_height) / TrackWidth
     const deltaFzLong = (this.rigidBody.mass * localAcc.z * this.cgHeight) / this.wheelbase;
     const deltaFzLat  = (this.rigidBody.mass * localAcc.x * this.cgHeight) / this.trackWidth;
 
-    // Apply weight transfer to corner loads
-    // FL (front left)
     if (this.wheels[0].isGrounded) this.wheels[0].Fz += deltaFzLong - deltaFzLat;
-    // FR (front right)
     if (this.wheels[1].isGrounded) this.wheels[1].Fz += deltaFzLong + deltaFzLat;
-    // RL (rear left)
     if (this.wheels[2].isGrounded) this.wheels[2].Fz += -deltaFzLong - deltaFzLat;
-    // RR (rear right)
     if (this.wheels[3].isGrounded) this.wheels[3].Fz += -deltaFzLong + deltaFzLat;
 
-    // Clamp loads >= 0
     for (const w of this.wheels) w.Fz = Math.max(0, w.Fz);
 
     // 4. Update Engine & Gearbox
@@ -126,12 +121,10 @@ export class Vehicle {
       const wheel = this.wheels[i];
       const isFront = i < 2;
 
-      // Steering angle + bump steer angle offset
       const bumpSteer = this.suspension.getBumpSteerAngle(wheel.suspensionLength);
       const totalWheelSteer = (isFront ? this.steeringAngle : 0) + (isFront ? bumpSteer : -bumpSteer);
 
       // Compute wheel velocity at contact point
-      // V_wheel = V_chassis + (omega_chassis × r_attach)
       Vec3.sub(wheel.worldAttachPos, this.rigidBody.position, this.scratchTyreForceWorld);
       Vec3.cross(this.rigidBody.angularVelocity, this.scratchTyreForceWorld, wheel.wheelVelocity);
       Vec3.add(wheel.wheelVelocity, this.rigidBody.velocity, wheel.wheelVelocity);
@@ -150,7 +143,6 @@ export class Vehicle {
 
       // Apply Tyre forces + Suspension normal force to RigidBody
       if (wheel.isGrounded) {
-        // Local tyre force = (Fx * heading) + (Fy * right) + (Fz * normal)
         this.scratchTyreForceWorld.set(0, 0, 0);
 
         Vec3.addScaled(this.scratchTyreForceWorld, wheel.wheelHeading, wheel.Fx, this.scratchTyreForceWorld);
